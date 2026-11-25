@@ -50,10 +50,10 @@ Views.estimates = {
   },
   linesHtml(list) {
     return `<div class="table-responsive mt-3"><table class="table">
-      <thead><tr><th>Description</th><th class="text-end">Size</th><th class="text-end">Qty</th><th>Unit</th><th class="text-end">Amount</th></tr></thead>
+      <thead><tr><th>Name</th><th class="text-end">Qty</th><th class="text-end">Rate</th><th class="text-end">Amount</th></tr></thead>
       <tbody>${list.map(it => `<tr>
-        <td>${U.esc(it.item_name)}</td><td class="text-end">${U.esc(U.size(it.width, it.height))}</td>
-        <td class="text-end">${Books.billQty(it)}</td><td>${U.esc(it.unit)}</td><td class="text-end">${U.inr(it.amount)}</td>
+        <td>${U.esc(it.item_name)}</td>
+        <td class="text-end">${Books.billQty(it)}</td><td class="text-end">${U.inr(it.rate)}</td><td class="text-end">${U.inr(it.amount)}</td>
       </tr>`).join('')}</tbody></table></div>`;
   },
   form(el, id, partyId) {

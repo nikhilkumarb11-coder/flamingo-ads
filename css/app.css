@@ -364,7 +364,7 @@ body:has(.form-card) .fab-wrap { display: none; }
 .items-head,
 .item-row {
   display: grid;
-  grid-template-columns: minmax(8rem, 1.5fr) 4.2rem 4.2rem 4.6rem 5.4rem 5.6rem 6rem 2.2rem;
+  grid-template-columns: minmax(8rem, 1.5fr) 5.5rem 6.5rem 6.5rem 2.2rem;
   gap: 0.45rem;
   align-items: center;
 }
@@ -631,10 +631,8 @@ body:has(.form-card) .fab-wrap { display: none; }
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
       "name name"
-      "w h"
-      "qty unit"
-      "rate amount"
-      "remove remove";
+      "qty rate"
+      "amount remove";
     padding: 0.75rem;
     margin-bottom: 0.6rem;
     border: 1px solid #eceef1;
@@ -646,10 +644,7 @@ body:has(.form-card) .fab-wrap { display: none; }
     grid-template-areas: "name name remove" "rate rate rate";
   }
   .item-name { grid-area: name; }
-  .item-w { grid-area: w; }
-  .item-h { grid-area: h; }
   .item-qty { grid-area: qty; }
-  .item-unit { grid-area: unit; }
   .item-rate { grid-area: rate; }
   .item-amount { grid-area: amount; align-self: end; padding-bottom: 0.6rem; }
   .item-remove { grid-area: remove; }

@@ -44,12 +44,10 @@ const Docs = (() => {
   }
 
   function linesTable(list, gst) {
-    const headCells = `<th>Description</th><th class="text-end">Size</th><th class="text-end">Qty</th><th>Unit</th>${gst ? '<th>HSN</th>' : ''}<th class="text-end">Rate</th><th class="text-end">Amount</th>`;
+    const headCells = `<th>Name</th><th class="text-end">Qty</th>${gst ? '<th>HSN</th>' : ''}<th class="text-end">Rate</th><th class="text-end">Amount</th>`;
     const body = list.map(it => `<tr>
       <td>${U.esc(it.item_name)}</td>
-      <td class="text-end">${U.esc(U.size(it.width, it.height))}</td>
       <td class="text-end">${Books.billQty(it)}</td>
-      <td>${U.esc(it.unit || '')}</td>
       ${gst ? `<td>${U.esc(it.hsn || '')}</td>` : ''}
       <td class="text-end">${U.money(it.rate)}</td>
       <td class="text-end">${U.money(it.amount)}</td>
