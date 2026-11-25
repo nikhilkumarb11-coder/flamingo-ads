@@ -99,7 +99,7 @@ const Docs = (() => {
   function job(doc) {
     const list = Books.items('JobItems', 'job_id', doc.id);
     const p = Books.party(doc.party_id) || {};
-    open(head('Job sheet', [['No.', doc.job_no || 'Pending'], ['Date', U.fmtDate(doc.date)], ['Due', U.fmtDate(doc.due_date)]])
+    open(head('Order sheet', [['No.', doc.job_no || 'Pending'], ['Date', U.fmtDate(doc.date)], ['Due', U.fmtDate(doc.due_date)]])
       + partyBlock(p.name, [doc.site_address || p.address, p.phone])
       + `<div class="small mb-2">Status: ${U.esc(doc.status)}</div>`
       + linesTable(list, false)

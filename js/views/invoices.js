@@ -43,9 +43,8 @@ Views.invoices = {
     const paid = Books.paidForInvoice(id);
     el.innerHTML = `<div class="d-flex flex-wrap gap-2 mb-3">
         <button type="button" class="btn btn-primary" data-print>${doc.tax_mode === 'gst' ? 'Print tax invoice' : 'Print invoice'}</button>
-        ${doc.status !== 'Void' && due > 0 ? `<a class="btn btn-outline-primary" href="#/receipts/new/${id}">Receipt</a>` : ''}
         ${doc.status !== 'Void' ? `<button type="button" class="btn btn-outline-danger" data-void>Void</button>` : ''}
-        ${doc.job_id ? `<a class="btn btn-outline-secondary" href="#/jobs/${doc.job_id}">Job</a>` : ''}
+        ${doc.job_id ? `<a class="btn btn-outline-secondary" href="#/orders/${doc.job_id}">Order</a>` : ''}
       </div>
       <div class="card"><div class="card-body">
         <div class="d-flex justify-content-between">
@@ -63,11 +62,13 @@ Views.invoices = {
           <div class="fw-bold">${U.inr(doc.total)}</div>
           <div class="small text-muted">Received ${U.inr(paid)} · Due ${U.inr(due)}</div>
         </div>
-      </div></div>`;
+      </div></div>
+      <div data-settle></div>`;
+    if (doc.status !== 'Void') Views.receipts.settle(el.querySelector('[data-settle]'), doc, () => this.detail(el, id));
     el.querySelector('[data-print]').addEventListener('click', () => Docs.invoice(doc));
     const voidBtn = el.querySelector('[data-void]');
     if (voidBtn) voidBtn.addEventListener('click', async () => {
-      const reason = await UI.promptText({ title: 'Void invoice', message: 'The number stays used. Issue a new invoice if you still need to bill this job.', label: 'Reason', confirmText: 'Void invoice', danger: true });
+      const reason = await UI.promptText({ title: 'Void invoice', message: 'The number stays used. Issue a new invoice if you still need to bill this order.', label: 'Reason', confirmText: 'Void invoice', danger: true });
       if (!reason) return;
       await Store.save('Invoices', { id, status: 'Void', void_reason: reason });
       UI.toast('Invoice voided');
@@ -86,11 +87,11 @@ Views.invoices = {
     if (ref && ref !== 'party') {
       job = Store.get('Jobs', ref);
       if (!job || job.is_deleted) {
-        el.innerHTML = `<div class="alert alert-warning">Job not found.</div>`;
+        el.innerHTML = `<div class="alert alert-warning">Order not found.</div>`;
         return;
       }
       if (job.status === 'Cancelled') {
-        el.innerHTML = `<div class="alert alert-warning">This job is cancelled. Reopen it before billing.</div>`;
+        el.innerHTML = `<div class="alert alert-warning">This order is cancelled. Reopen it before billing.</div>`;
         return;
       }
       const existing = Books.activeInvoiceForJob(job.id);
@@ -124,7 +125,7 @@ Views.invoices = {
       </div>
       <div class="d-flex gap-2 mt-3">
         <button class="btn btn-primary" type="submit">Issue ${taxMode === 'gst' ? 'tax invoice' : 'invoice'}</button>
-        <a class="btn btn-outline-secondary" href="${job ? '#/jobs/' + job.id : '#/invoices'}">Cancel</a>
+        <a class="btn btn-outline-secondary" href="${job ? '#/orders/' + job.id : '#/invoices'}">Cancel</a>
       </div>
     </div></form>`;
     let editor;

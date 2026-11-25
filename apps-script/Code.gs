@@ -68,26 +68,26 @@ var VALIDATORS = {
     if (!row.name) throw invalid_('Service name is required');
   },
   Estimates: function (row, prev, ctx) {
-    if (prev && prev.job_id && row.job_id && row.job_id !== prev.job_id) throw invalid_('This estimate is already linked to a job');
+    if (prev && prev.job_id && row.job_id && row.job_id !== prev.job_id) throw invalid_('This estimate is already linked to an order');
     if (row.is_deleted) {
       if (prev && prev.status === 'Accepted') throw invalid_('An accepted estimate stays on record');
       return;
     }
     if (EST_STATUSES.indexOf(row.status) === -1) throw invalid_('Unknown estimate status');
-    if (row.status === 'Accepted' && !row.job_id) throw invalid_('An accepted estimate needs its job');
+    if (row.status === 'Accepted' && !row.job_id) throw invalid_('An accepted estimate needs its order');
     if (!row.party_id) throw invalid_('Choose a party');
-    if (row.job_id && !findRow_(ctx, 'Jobs', row.job_id)) throw invalid_('Job not found');
+    if (row.job_id && !findRow_(ctx, 'Jobs', row.job_id)) throw invalid_('Order not found');
   },
   EstimateItems: function (row, prev, ctx) { lineItem_(row, 'Estimates', 'estimate_id', ctx); },
   Jobs: function (row, prev, ctx) {
     if (row.is_deleted) return;
     if (!row.party_id) throw invalid_('Choose a party');
-    if (JOB_STATUSES.indexOf(row.status) === -1) throw invalid_('Unknown job status');
+    if (JOB_STATUSES.indexOf(row.status) === -1) throw invalid_('Unknown order status');
     if (prev && prev.estimate_id && row.estimate_id !== prev.estimate_id) throw invalid_('The estimate link cannot be changed');
     if (row.estimate_id) {
       var est = findRow_(ctx, 'Estimates', row.estimate_id);
       if (!est || est.is_deleted) throw invalid_('Estimate not found');
-      if (est.job_id && est.job_id !== row.id) throw invalid_('That estimate already has a job');
+      if (est.job_id && est.job_id !== row.id) throw invalid_('That estimate already has an order');
     }
   },
   JobItems: function (row, prev, ctx) { lineItem_(row, 'Jobs', 'job_id', ctx); },
@@ -111,9 +111,9 @@ var VALIDATORS = {
     row.void_reason = '';
     if (row.job_id) {
       var job = findRow_(ctx, 'Jobs', row.job_id);
-      if (!job || job.is_deleted) throw invalid_('Job not found');
-      if (job.status === 'Cancelled') throw invalid_('This job is cancelled');
-      if (activeInvoiceForJob_(ctx, row.job_id)) throw invalid_('This job already has an invoice');
+      if (!job || job.is_deleted) throw invalid_('Order not found');
+      if (job.status === 'Cancelled') throw invalid_('This order is cancelled');
+      if (activeInvoiceForJob_(ctx, row.job_id)) throw invalid_('This order already has an invoice');
     }
     if (row.tax_mode === 'none') {
       row.cgst = 0; row.sgst = 0; row.igst = 0; row.tax_amount = 0; row.gst_rate = 0;
@@ -160,7 +160,7 @@ var VALIDATORS = {
       if (paidForPurchase_(ctx, row.id) > 0.001) throw invalid_('Void the payments on this purchase first');
       tableCtx_(ctx, 'PurchaseItems').rows.forEach(function (it) {
         if (it.is_deleted || it.purchase_id !== row.id) return;
-        if (onHand_(ctx, it.material_id, row.id) < -0.001) throw invalid_('Material from this purchase is already issued to a job');
+        if (onHand_(ctx, it.material_id, row.id) < -0.001) throw invalid_('Material from this purchase is already issued to an order');
       });
       return;
     }
@@ -723,7 +723,7 @@ function setup() {
     prefix_exp: 'EXP',
     opening_cash: '0',
     opening_bank: '0',
-    invoice_terms: '50% advance confirms the job.\nBalance is due before installation.\nPrinting starts after the artwork is approved.\nGST extra, unless the invoice says otherwise.'
+    invoice_terms: '50% advance confirms the order.\nBalance is due before installation.\nPrinting starts after the artwork is approved.\nGST extra, unless the invoice says otherwise.'
   });
   seedServices_();
   seedMaterials_();

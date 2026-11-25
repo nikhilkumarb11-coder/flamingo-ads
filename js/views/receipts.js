@@ -51,6 +51,63 @@ Views.receipts = {
       UI.toast('Receipt voided');
     });
   },
+  /** Payment against one invoice, kept on the order or the bill. */
+  settle(container, invoice, rerender) {
+    if (!container) return;
+    if (!invoice || invoice.status === 'Void') { container.innerHTML = ''; return; }
+    const due = Books.invoiceDue(invoice);
+    const paid = Books.paidForInvoice(invoice.id);
+    const rows = Store.list('Receipts')
+      .filter(r => r.invoice_id === invoice.id && r.status !== 'Void')
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.created_at || '').localeCompare(String(b.created_at || '')));
+    container.innerHTML = `<div class="card mt-3"><div class="card-body">
+      <div class="d-flex justify-content-between align-items-baseline">
+        <h6 class="mb-1">Settlement</h6>
+        <div class="fw-bold">${due > 0.001 ? 'Due ' + U.inr(due) : 'Settled'}</div>
+      </div>
+      <div class="small text-muted mb-2">${U.esc(invoice.invoice_no || 'Invoice')} · received ${U.inr(paid)} of ${U.inr(invoice.total)}</div>
+      ${rows.map(r => `<div class="d-flex justify-content-between align-items-center py-1">
+        <span>${U.fmtDate(r.date)} · ${U.esc(r.account || '')}${r.receipt_no ? ' · ' + U.esc(r.receipt_no) : ''}</span>
+        <span class="d-flex align-items-center gap-2">${U.inr(r.amount)}
+          <button type="button" class="btn btn-sm btn-outline-danger" data-void-receipt="${r.id}">Void</button></span>
+      </div>`).join('') || '<div class="text-muted small">No payment yet.</div>'}
+      ${due > 0.001 ? `<div class="row g-2 align-items-end mt-2">
+        <div class="col-6 col-md-3"><label class="form-label">Amount</label>
+          <input class="form-control" data-amount inputmode="decimal" value="${due}"></div>
+        <div class="col-6 col-md-3"><label class="form-label">Into</label>
+          <select class="form-select" data-account><option>Cash</option><option>Bank</option></select></div>
+        <div class="col-12 col-md-auto"><button type="button" class="btn btn-primary" data-receive>Receive</button></div>
+      </div>
+      <p class="small text-muted mt-2 mb-0">Use the full balance to settle, or a smaller amount for a part payment.</p>` : ''}
+    </div></div>`;
+    const again = () => { if (rerender) rerender(); else this.settle(container, Store.get('Invoices', invoice.id)); };
+    const receive = container.querySelector('[data-receive]');
+    if (receive) receive.addEventListener('click', async () => {
+      const value = U.round2(container.querySelector('[data-amount]').value);
+      const live = Store.get('Invoices', invoice.id);
+      const left = Books.invoiceDue(live);
+      if (!(value > 0)) return UI.toast('Amount must be more than 0', 'warning');
+      if (value > left + 0.001) return UI.toast('Amount is more than the balance of ' + U.inr(left), 'warning');
+      await Store.save('Receipts', {
+        invoice_id: live.id,
+        party_id: live.party_id,
+        date: U.today(),
+        amount: value,
+        account: container.querySelector('[data-account]').value,
+        note: '',
+        status: ''
+      });
+      UI.toast(value + 0.001 >= left ? 'Settled' : 'Part payment recorded. ' + U.inr(U.round2(left - value)) + ' still due');
+      again();
+    });
+    container.querySelectorAll('[data-void-receipt]').forEach(btn => btn.addEventListener('click', async () => {
+      const ok = await UI.confirm({ title: 'Void payment', message: 'This amount becomes due again.', confirmText: 'Void payment' });
+      if (!ok) return;
+      await Store.save('Receipts', { id: btn.dataset.voidReceipt, status: 'Void' });
+      UI.toast('Payment voided');
+      again();
+    }));
+  },
   form(el, invoiceId) {
     const open = Store.list('Invoices').filter(i => i.status !== 'Void' && Books.invoiceDue(i) > 0);
     const preset = invoiceId ? Store.get('Invoices', invoiceId) : null;

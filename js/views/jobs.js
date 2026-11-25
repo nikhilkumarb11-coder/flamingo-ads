@@ -1,7 +1,7 @@
-/** Jobs. Linked to an estimate when created from one, otherwise independent. */
-Views.jobs = {
-  title: 'Jobs',
-  refreshOn: ['Jobs', 'JobItems', 'Invoices', 'Estimates', 'Issues', 'Materials'],
+/** Orders. Linked to an estimate when created from one, otherwise independent. */
+Views.orders = {
+  title: 'Orders',
+  refreshOn: ['Jobs', 'JobItems', 'Invoices', 'Receipts', 'Estimates', 'Issues', 'Materials'],
   render(el, params) {
     const [a, b] = params;
     if (a === 'new') return this.form(el, null, { partyId: b || '' });
@@ -13,35 +13,35 @@ Views.jobs = {
   list(el) {
     const rows = Store.list('Jobs').sort((a, b) => String(b.date).localeCompare(String(a.date)));
     el.innerHTML = `<div class="card"><div class="card-body">
-      <div class="d-flex justify-content-between mb-3"><span class="text-muted">${rows.length} jobs</span>
-        <a class="btn btn-primary" href="#/jobs/new">New job</a></div>
+      <div class="d-flex justify-content-between mb-3"><span class="text-muted">${rows.length} orders</span>
+        <a class="btn btn-primary" href="#/orders/new">New order</a></div>
       <div class="table-responsive"><table class="table">
         <thead><tr><th>No.</th><th>Party</th><th>Status</th><th>Due</th><th class="text-end">Total</th></tr></thead>
         <tbody>${rows.map(j => `<tr>
-          <td><a href="#/jobs/${j.id}">${U.esc(j.job_no || 'Pending')}</a>
+          <td><a href="#/orders/${j.id}">${U.esc(j.job_no || 'Pending')}</a>
             <div class="small text-muted">${j.estimate_id ? 'From estimate' : 'Independent'}</div></td>
           <td>${U.esc(Books.partyName(j.party_id))}</td>
           <td>${Books.badge(j.status)}</td>
           <td>${U.fmtDate(j.due_date)}</td>
           <td class="text-end">${U.inr(j.total)}</td>
-        </tr>`).join('') || '<tr><td colspan="5" class="text-muted py-4 text-center">No jobs yet.</td></tr>'}
+        </tr>`).join('') || '<tr><td colspan="5" class="text-muted py-4 text-center">No orders yet.</td></tr>'}
         </tbody></table></div>
     </div></div>`;
   },
   detail(el, id) {
     const doc = Store.get('Jobs', id);
-    if (!doc || doc.is_deleted) { el.innerHTML = `<div class="alert alert-warning">Job not found.</div>`; return; }
-    document.getElementById('page-title').textContent = doc.job_no || 'Job';
+    if (!doc || doc.is_deleted) { el.innerHTML = `<div class="alert alert-warning">Order not found.</div>`; return; }
+    document.getElementById('page-title').textContent = doc.job_no || 'Order';
     const list = Books.items('JobItems', 'job_id', id);
     const inv = Books.activeInvoiceForJob(id);
     const est = doc.estimate_id ? Store.get('Estimates', doc.estimate_id) : null;
     el.innerHTML = `<div class="d-flex flex-wrap gap-2 mb-3">
         ${inv
-          ? `<a class="btn btn-primary" href="#/invoices/${inv.id}">${U.esc(inv.invoice_no || 'Invoice')}</a>`
-          : `<a class="btn btn-primary" href="#/invoices/new/gst/${id}">Tax invoice</a>
-             <a class="btn btn-outline-primary" href="#/invoices/new/none/${id}">Invoice without GST</a>`}
-        <button type="button" class="btn btn-outline-primary" data-print>Job sheet</button>
-        <a class="btn btn-outline-secondary" href="#/jobs/${id}/edit">Edit</a>
+          ? `<a class="btn btn-outline-primary" href="#/invoices/${inv.id}">${U.esc(inv.invoice_no || 'Invoice')}</a>`
+          : `<a class="btn btn-outline-primary" href="#/invoices/new/gst/${id}">Tax invoice</a>
+             <a class="btn btn-outline-secondary" href="#/invoices/new/none/${id}">Invoice without GST</a>`}
+        <button type="button" class="btn btn-outline-primary" data-print>Order sheet</button>
+        <a class="btn btn-outline-secondary" href="#/orders/${id}/edit">Edit</a>
       </div>
       <div class="card mb-3"><div class="card-body d-flex flex-wrap gap-2">
         ${Books.JOB_STATUSES.map(s => `<button type="button" class="btn btn-sm ${s === doc.status ? 'btn-primary' : 'btn-outline-secondary'}" data-status="${s}">${s}</button>`).join('')}
@@ -50,10 +50,14 @@ Views.jobs = {
         <div class="fw-semibold">${U.esc(Books.partyName(doc.party_id))}</div>
         <div class="small text-muted">${U.fmtDate(doc.date)}${doc.due_date ? ' · due ' + U.fmtDate(doc.due_date) : ''}</div>
         ${doc.site_address ? `<div class="small mt-1">${U.esc(doc.site_address)}</div>` : ''}
-        <div class="small mt-1">${est ? `<a href="#/estimates/${est.id}">Estimate ${U.esc(est.estimate_no || '')}</a>` : 'No estimate. This job stands on its own.'}</div>
+        <div class="small mt-1">${est ? `<a href="#/estimates/${est.id}">Estimate ${U.esc(est.estimate_no || '')}</a>` : 'No estimate. This order stands on its own.'}</div>
         ${Views.estimates.linesHtml(list)}
         <div class="text-end fw-bold">${U.inr(doc.total)}</div>
       </div></div>
+      ${inv ? '<div data-settle></div>' : `<div class="card mt-3"><div class="card-body">
+        <h6 class="mb-1">Settlement</h6>
+        <p class="text-muted small mb-0">Issue the invoice on this order. The balance can then be received here, in full or in parts.</p>
+      </div></div>`}
       <div class="card mt-3"><div class="card-body">
         <div class="d-flex justify-content-between"><h6 class="mb-2">Material issued</h6><a href="#/issues/new/${id}">Issue material</a></div>
         ${Store.list('Issues').filter(it => it.job_id === id).map(it => {
@@ -62,8 +66,9 @@ Views.jobs = {
             <span>${U.fmtDate(it.date)} · ${U.esc(m ? m.name : 'Material')} · ${it.qty} ${U.esc((m && m.unit) || '')}</span>
             <button type="button" class="btn btn-sm btn-outline-danger" data-unissue="${it.id}">Remove</button>
           </div>`;
-        }).join('') || '<div class="text-muted small">Nothing issued yet. Saving the job does not move stock.</div>'}
+        }).join('') || '<div class="text-muted small">Nothing issued yet. Saving the order does not move stock.</div>'}
       </div></div>`;
+    if (inv) Views.receipts.settle(el.querySelector('[data-settle]'), inv, () => this.detail(el, id));
     el.querySelector('[data-print]').addEventListener('click', () => Docs.job(doc));
     el.querySelectorAll('[data-unissue]').forEach(btn => btn.addEventListener('click', async () => {
       await Store.remove('Issues', btn.dataset.unissue);
@@ -77,11 +82,11 @@ Views.jobs = {
   },
   form(el, id, { partyId = '', estimateId = '' } = {}) {
     const doc = id ? Store.get('Jobs', id) : null;
-    if (id && !doc) { el.innerHTML = `<div class="alert alert-warning">Job not found.</div>`; return; }
+    if (id && !doc) { el.innerHTML = `<div class="alert alert-warning">Order not found.</div>`; return; }
     const est = estimateId ? Store.get('Estimates', estimateId) : (doc && doc.estimate_id ? Store.get('Estimates', doc.estimate_id) : null);
     if (estimateId && (!est || est.is_deleted)) { el.innerHTML = `<div class="alert alert-warning">Estimate not found.</div>`; return; }
-    if (estimateId && est.job_id) { location.hash = '#/jobs/' + est.job_id; return; }
-    document.getElementById('page-title').textContent = id ? 'Edit job' : (est ? 'Job from estimate' : 'New job');
+    if (estimateId && est.job_id) { location.hash = '#/orders/' + est.job_id; return; }
+    document.getElementById('page-title').textContent = id ? 'Edit order' : (est ? 'Order from estimate' : 'New order');
     const existing = id
       ? Books.items('JobItems', 'job_id', id)
       : (est ? Books.items('EstimateItems', 'estimate_id', est.id).map(it => ({ ...it, id: undefined })) : []);
@@ -104,8 +109,8 @@ Views.jobs = {
         <div class="col-12"><label class="form-label">Notes</label><textarea class="form-control" name="notes" rows="2">${U.esc((doc && doc.notes) || (est && est.notes) || '')}</textarea></div>
       </div>
       <div class="d-flex gap-2 mt-3">
-        <button class="btn btn-primary" type="submit">${est && !id ? 'Create linked job' : 'Save job'}</button>
-        <a class="btn btn-outline-secondary" href="${id ? '#/jobs/' + id : '#/jobs'}">Cancel</a>
+        <button class="btn btn-primary" type="submit">${est && !id ? 'Create order' : 'Save order'}</button>
+        <a class="btn btn-outline-secondary" href="${id ? '#/orders/' + id : '#/orders'}">Cancel</a>
       </div>
     </div></form>`;
     const editor = Lines.mount(el.querySelector('[data-lines]'), {
@@ -146,8 +151,9 @@ Views.jobs = {
       ];
       if (!id && est) ops.push(['Estimates', { id: est.id, status: 'Accepted', job_id: jobId }]);
       await Store.saveMany(ops);
-      UI.toast(est && !id ? 'Job created from the estimate' : 'Job saved');
-      location.hash = '#/jobs/' + jobId;
+      UI.toast(est && !id ? 'Order created from the estimate' : 'Order saved');
+      location.hash = '#/orders/' + jobId;
     });
   }
 };
+Views.jobs = Views.orders;

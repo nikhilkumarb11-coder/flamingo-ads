@@ -1,7 +1,7 @@
 {
   "name": "Flamingo Ads",
   "short_name": "Flamingo",
-  "description": "Estimates, jobs, invoices, stock and expenses for Flamingo Ads.",
+  "description": "Estimates, orders, invoices, stock and expenses for Flamingo Ads.",
   "id": "./",
   "start_url": "./#/home",
   "scope": "./",

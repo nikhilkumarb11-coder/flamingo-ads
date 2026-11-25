@@ -12,7 +12,7 @@ const Books = (() => {
     'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'];
 
   const DEFAULT_TERMS = [
-    '50% advance confirms the job.',
+    '50% advance confirms the order.',
     'Balance is due before installation.',
     'Printing starts after the artwork is approved.',
     'GST extra, unless the invoice says otherwise.'

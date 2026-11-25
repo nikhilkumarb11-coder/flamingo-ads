@@ -12,7 +12,7 @@ Views.materials = {
     const rows = Store.list('Materials').sort((a, b) => String(a.name).localeCompare(String(b.name)));
     el.innerHTML = `<div class="card"><div class="card-body">
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <p class="mb-0 text-muted">Sheets, vinyl and ink. A job does not reduce stock until you issue the material.</p>
+        <p class="mb-0 text-muted">Sheets, vinyl and ink. An order does not reduce stock until you issue the material.</p>
         <a class="btn btn-primary" href="#/materials/new">Add</a>
       </div>
       <div class="table-responsive"><table class="table">
@@ -40,7 +40,7 @@ Views.materials = {
       return p && p.status !== 'Void' ? { date: p.date, label: `Purchase ${p.purchase_no || ''}`, qty: Number(it.qty) || 0, href: `#/purchases/${p.id}` } : null;
     }).filter(Boolean);
     const outs = Store.list('Issues').filter(it => it.material_id === id).map(it => ({
-      date: it.date, label: `Issued${it.job_id ? ' · ' + ((Store.get('Jobs', it.job_id) || {}).job_no || 'job') : ''}`, qty: -(Number(it.qty) || 0), href: it.job_id ? `#/jobs/${it.job_id}` : ''
+      date: it.date, label: `Issued${it.job_id ? ' · ' + ((Store.get('Jobs', it.job_id) || {}).job_no || 'order') : ''}`, qty: -(Number(it.qty) || 0), href: it.job_id ? `#/orders/${it.job_id}` : ''
     }));
     const moves = ins.concat(outs).sort((a, b) => String(b.date).localeCompare(String(a.date)));
     el.innerHTML = `<div class="d-flex gap-2 mb-3">
@@ -109,11 +109,11 @@ Views.issues = {
     const mats = Store.list('Materials').filter(m => m.active !== false && m.active !== 'FALSE');
     document.getElementById('page-title').textContent = 'Issue material';
     el.innerHTML = `<form class="card"><div class="card-body">
-      <p class="text-muted">This is the only way a job uses stock. Saving the job itself does not.</p>
+      <p class="text-muted">This is the only way an order uses stock. Saving the order itself does not.</p>
       <div class="row g-3">
-        <div class="col-md-6"><label class="form-label">Job</label>
-          <select class="form-select" name="job_id"><option value="">No job</option>
-            ${Store.list('Jobs').filter(j => j.status !== 'Cancelled').map(j => `<option value="${j.id}"${j.id === jobId ? ' selected' : ''}>${U.esc(j.job_no || 'Job')} · ${U.esc(Books.partyName(j.party_id))}</option>`).join('')}
+        <div class="col-md-6"><label class="form-label">Order</label>
+          <select class="form-select" name="job_id"><option value="">No order</option>
+            ${Store.list('Jobs').filter(j => j.status !== 'Cancelled').map(j => `<option value="${j.id}"${j.id === jobId ? ' selected' : ''}>${U.esc(j.job_no || 'Order')} · ${U.esc(Books.partyName(j.party_id))}</option>`).join('')}
           </select></div>
         <div class="col-md-6"><label class="form-label">Date</label><input class="form-control" type="date" name="date" value="${U.today()}"></div>
         <div class="col-md-6"><label class="form-label">Material</label>
@@ -123,7 +123,7 @@ Views.issues = {
       </div>
       <div class="d-flex gap-2 mt-3">
         <button class="btn btn-primary" type="submit" ${mats.length ? '' : 'disabled'}>Issue</button>
-        <a class="btn btn-outline-secondary" href="${job ? '#/jobs/' + job.id : '#/materials'}">Cancel</a>
+        <a class="btn btn-outline-secondary" href="${job ? '#/orders/' + job.id : '#/materials'}">Cancel</a>
       </div>
     </div></form>`;
     el.querySelector('form').addEventListener('submit', async e => {

@@ -33,7 +33,7 @@ Views.estimates = {
     const list = Books.items('EstimateItems', 'estimate_id', id);
     const job = doc.job_id ? Store.get('Jobs', doc.job_id) : null;
     el.innerHTML = `<div class="d-flex flex-wrap gap-2 mb-3">
-        ${job ? `<a class="btn btn-primary" href="#/jobs/${job.id}">Open ${U.esc(job.job_no || 'job')}</a>` : `<a class="btn btn-primary" href="#/jobs/from/${id}">Create job</a>`}
+        ${job ? `<a class="btn btn-primary" href="#/orders/${job.id}">Open ${U.esc(job.job_no || 'order')}</a>` : `<a class="btn btn-primary" href="#/orders/from/${id}">Create order</a>`}
         <button type="button" class="btn btn-outline-primary" data-print>Print</button>
         <a class="btn btn-outline-secondary" href="#/estimates/${id}/edit">Edit</a>
       </div>

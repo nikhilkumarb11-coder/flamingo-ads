@@ -60,8 +60,8 @@ const Local = (() => {
       if (!next.name) fail('Service name is required');
     }
     if (table === 'Estimates') {
-      if (prev && prev.job_id && next.job_id && next.job_id !== prev.job_id) fail('This estimate is already linked to a job');
-      if (next.status === 'Accepted' && !next.job_id) fail('An accepted estimate needs its job');
+      if (prev && prev.job_id && next.job_id && next.job_id !== prev.job_id) fail('This estimate is already linked to an order');
+      if (next.status === 'Accepted' && !next.job_id) fail('An accepted estimate needs its order');
       if (!next.party_id) fail('Choose a party');
     }
     if (table === 'Jobs') {
@@ -69,7 +69,7 @@ const Local = (() => {
       if (next.estimate_id) {
         const est = Store.get('Estimates', next.estimate_id);
         if (!est || est.is_deleted) fail('Estimate not found');
-        if (est.job_id && est.job_id !== next.id) fail('That estimate already has a job');
+        if (est.job_id && est.job_id !== next.id) fail('That estimate already has an order');
       }
       if (prev && prev.estimate_id && next.estimate_id !== prev.estimate_id) fail('The estimate link cannot be changed');
     }
@@ -90,10 +90,10 @@ const Local = (() => {
       if (!(Number(next.total) > 0)) fail('Invoice total must be more than 0');
       if (next.job_id) {
         const job = Store.get('Jobs', next.job_id);
-        if (!job || job.is_deleted) fail('Job not found');
-        if (job.status === 'Cancelled') fail('This job is cancelled');
+        if (!job || job.is_deleted) fail('Order not found');
+        if (job.status === 'Cancelled') fail('This order is cancelled');
         const other = Store.list('Invoices').find(i => i.job_id === next.job_id && i.status !== 'Void' && i.id !== next.id);
-        if (other) fail('This job already has an invoice');
+        if (other) fail('This order already has an invoice');
       }
       next.status = 'Issued';
     }
@@ -120,7 +120,7 @@ const Local = (() => {
         if (next.status !== 'Void') fail('A purchase can only be voided');
         if (!next.void_reason) fail('Give a reason for voiding');
         Books.items('PurchaseItems', 'purchase_id', next.id).forEach(it => {
-          if (Books.onHand(it.material_id) < -0.001) fail('Material from this purchase is already issued to a job');
+          if (Books.onHand(it.material_id) < -0.001) fail('Material from this purchase is already issued to an order');
         });
         const paid = Books.paidForPurchase(next.id);
         if (paid > 0) fail('Void the payments on this purchase first');

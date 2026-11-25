@@ -17,7 +17,7 @@ Views.home = {
     const dueJobs = Books.reminders();
     const pipeline = Books.JOB_STATUSES.filter(s => s !== 'Done' && s !== 'Cancelled').map(s => {
       const n = Store.list('Jobs').filter(j => j.status === s).length;
-      return `<a class="col-6 col-md-4 col-xl-2" href="#/jobs"><div class="border rounded p-2 h-100"><div class="small text-muted">${s}</div><div class="fw-bold">${n}</div></div></a>`;
+      return `<a class="col-6 col-md-4 col-xl-2" href="#/orders"><div class="border rounded p-2 h-100"><div class="small text-muted">${s}</div><div class="fw-bold">${n}</div></div></a>`;
     }).join('');
     const waiting = Store.list('Estimates').filter(e => e.status === 'Draft' || e.status === 'Sent');
     const overdueInv = Store.list('Invoices').filter(i => i.status !== 'Void' && Books.invoiceDue(i) > 0.001)
@@ -51,9 +51,9 @@ Views.home = {
           </div>
         </div></div></div>
         <div class="col-lg-5"><div class="card h-100"><div class="card-body">
-          <div class="d-flex justify-content-between"><h6 class="mb-2">Due soon</h6><a href="#/jobs">Jobs</a></div>
-          ${dueJobs.length ? dueJobs.slice(0, 5).map(r => `<a class="d-flex justify-content-between py-1 text-body" href="#/jobs/${r.job.id}">
-            <span>${U.esc(r.job.job_no || 'Job')} · ${U.esc(Books.partyName(r.job.party_id))}</span>
+          <div class="d-flex justify-content-between"><h6 class="mb-2">Due soon</h6><a href="#/orders">Orders</a></div>
+          ${dueJobs.length ? dueJobs.slice(0, 5).map(r => `<a class="d-flex justify-content-between py-1 text-body" href="#/orders/${r.job.id}">
+            <span>${U.esc(r.job.job_no || 'Order')} · ${U.esc(Books.partyName(r.job.party_id))}</span>
             <span class="small ${r.days < 0 ? 'text-danger' : 'text-muted'}">${r.days < 0 ? Math.abs(r.days) + 'd overdue' : r.days === 0 ? 'Today' : 'in ' + r.days + 'd'}</span>
           </a>`).join('') : '<div class="text-muted small">Nothing due in the next few days.</div>'}
         </div></div></div>
@@ -65,7 +65,7 @@ Views.home = {
           : '<div class="text-muted small">Everything is above its reorder level.</div>'}
       </div></div>
       <div class="card mb-3"><div class="card-body">
-        <h6>Jobs in progress</h6>
+        <h6>Orders in progress</h6>
         <div class="row g-2">${pipeline}</div>
       </div></div>
       <div class="row g-3">
@@ -77,7 +77,7 @@ Views.home = {
         </div></div></div>
         <div class="col-lg-6"><div class="card h-100"><div class="card-body">
           <div class="d-flex justify-content-between"><h6>Invoices with a balance</h6><a href="#/invoices">All</a></div>
-          ${overdueInv.map(i => `<a class="d-flex justify-content-between py-1 text-body" href="#/invoices/${i.id}">
+          ${overdueInv.map(i => `<a class="d-flex justify-content-between py-1 text-body" href="${i.job_id ? '#/orders/' + i.job_id : '#/invoices/' + i.id}">
             <span>${U.esc(i.invoice_no || 'Invoice')} · ${U.esc(i.buyer_name || '')}</span>
             <span class="small">${U.inr(Books.invoiceDue(i))}</span></a>`).join('') || '<div class="text-muted small">Nothing outstanding.</div>'}
         </div></div></div>

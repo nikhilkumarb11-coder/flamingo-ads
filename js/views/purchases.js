@@ -58,7 +58,7 @@ Views.purchases = {
         short[it.material_id] = (short[it.material_id] || 0) + (Number(it.qty) || 0);
       });
       const blocked = Object.entries(short).some(([mid, qty]) => Books.onHand(mid) - qty < -0.001);
-      if (blocked) return UI.toast('Material from this purchase is already issued to a job', 'warning');
+      if (blocked) return UI.toast('Material from this purchase is already issued to an order', 'warning');
       const reason = await UI.promptText({ title: 'Void purchase', message: 'Stock from this purchase comes back out.', label: 'Reason', confirmText: 'Void purchase', danger: true });
       if (!reason) return;
       await Store.save('Purchases', { id, status: 'Void', void_reason: reason });

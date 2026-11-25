@@ -4,7 +4,7 @@ const NAV = [
   { header: 'Work' },
   { id: 'parties', label: 'Parties', icon: 'bx-user' },
   { id: 'estimates', label: 'Estimates', icon: 'bx-file' },
-  { id: 'jobs', label: 'Jobs', icon: 'bx-briefcase' },
+  { id: 'orders', label: 'Orders', icon: 'bx-briefcase' },
   { id: 'invoices', label: 'Invoices', icon: 'bx-receipt' },
   { id: 'receipts', label: 'Receipts', icon: 'bx-wallet' },
   { id: 'purchases', label: 'Purchases', icon: 'bx-cart' },
@@ -28,17 +28,16 @@ const BOTTOM_NAV = [
   { id: 'home', label: 'Home', icon: 'bx-home-circle' },
   { id: 'parties', label: 'Parties', icon: 'bx-user' },
   { id: 'new', label: 'New', icon: 'bx-plus', action: 'new' },
-  { id: 'jobs', label: 'Jobs', icon: 'bx-briefcase' },
+  { id: 'orders', label: 'Orders', icon: 'bx-briefcase' },
   { id: 'more', label: 'More', icon: 'bx-grid-alt', action: 'more', rest: true }
 ];
 
 const QUICK_ACTIONS = [
   { label: 'Estimate', icon: 'bx-file', href: '#/estimates/new', tone: 'violet' },
-  { label: 'Job', icon: 'bx-briefcase', href: '#/jobs/new', tone: 'rose' },
+  { label: 'Order', icon: 'bx-briefcase', href: '#/orders/new', tone: 'rose' },
   { label: 'Party', icon: 'bx-user-plus', href: '#/parties/new', tone: 'blue' },
   { label: 'Tax invoice', icon: 'bx-receipt', href: '#/invoices/new/gst', tone: 'amber' },
   { label: 'Invoice without GST', icon: 'bx-receipt', href: '#/invoices/new/none', tone: 'green' },
-  { label: 'Receipt', icon: 'bx-wallet', href: '#/receipts/new', tone: 'orange' },
   { label: 'Purchase', icon: 'bx-cart', href: '#/purchases/new', tone: 'blue' },
   { label: 'Expense', icon: 'bx-money', href: '#/expenses/new', tone: 'rose' }
 ];
@@ -103,7 +102,12 @@ const UI = (() => {
   }
 
   function route() {
-    const { name, params } = parseHash();
+    let { name, params } = parseHash();
+    if (name === 'jobs') {
+      const rest = params.map(encodeURIComponent).join('/');
+      location.replace('#/orders' + (rest ? '/' + rest : ''));
+      return;
+    }
     const view = Views[name] || Views.notfound;
     current = { name, params, view };
     document.documentElement.classList.remove('layout-menu-expanded');
@@ -152,7 +156,7 @@ const UI = (() => {
 
   function updateBadges() {
     const due = Books.reminders().length;
-    document.querySelectorAll('[data-badge="home"], [data-badge="jobs"]').forEach(b => {
+    document.querySelectorAll('[data-badge="home"], [data-badge="orders"]').forEach(b => {
       b.textContent = due;
       b.classList.toggle('d-none', !due);
     });
@@ -302,9 +306,9 @@ const Search = (() => {
           .map(p => ({ href: `#/parties/${encodeURIComponent(p.id)}`, title: p.name, sub: [p.phone, p.gstin].filter(Boolean).join(' · ') }))
       },
       {
-        title: 'Jobs', icon: 'bx-briefcase', tone: 'rose',
+        title: 'Orders', icon: 'bx-briefcase', tone: 'rose',
         rows: Store.list('Jobs').filter(j => has(j.job_no, Books.partyName(j.party_id), j.site_address)).sort((a, b) => recent(a, b, 'date'))
-          .map(j => ({ href: `#/jobs/${encodeURIComponent(j.id)}`, title: `${j.job_no || 'Job'} · ${Books.partyName(j.party_id)}`, sub: `${U.fmtDate(j.date)} · ${j.status}` }))
+          .map(j => ({ href: `#/orders/${encodeURIComponent(j.id)}`, title: `${j.job_no || 'Order'} · ${Books.partyName(j.party_id)}`, sub: `${U.fmtDate(j.date)} · ${j.status}` }))
       },
       {
         title: 'Estimates', icon: 'bx-file', tone: 'blue',
@@ -332,7 +336,7 @@ const Search = (() => {
 
   function show(q) {
     if (!q.trim()) {
-      box.innerHTML = `<div class="search-empty"><i class="bx bx-search-alt"></i><div>Type a party, phone, job, estimate, invoice, material or purchase.</div></div>`;
+      box.innerHTML = `<div class="search-empty"><i class="bx bx-search-alt"></i><div>Type a party, phone, order, estimate, invoice, material or purchase.</div></div>`;
       return;
     }
     const groups = find(q);

@@ -37,7 +37,7 @@ Views.settings = {
           ${field('prefix_gst', 'With GST', s.prefix_gst || 'GST')}
           ${field('prefix_bill', 'Without GST', s.prefix_bill || 'BILL')}
           ${field('prefix_est', 'Estimate', s.prefix_est || 'EST')}
-          ${field('prefix_job', 'Job', s.prefix_job || 'JOB')}
+          ${field('prefix_job', 'Order', s.prefix_job || 'JOB')}
           ${field('prefix_rcpt', 'Receipt', s.prefix_rcpt || 'RCT')}
           ${field('prefix_pur', 'Purchase', s.prefix_pur || 'PUR')}
           ${field('prefix_pay', 'Payment out', s.prefix_pay || 'PAY')}

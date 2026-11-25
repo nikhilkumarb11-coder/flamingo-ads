@@ -58,7 +58,7 @@ Views.parties = {
     </tr>`).join('');
     el.innerHTML = `<div class="d-flex flex-wrap gap-2 mb-3">
         <a class="btn btn-primary" href="#/estimates/new/${id}">Estimate</a>
-        <a class="btn btn-outline-primary" href="#/jobs/new/${id}">Job</a>
+        <a class="btn btn-outline-primary" href="#/orders/new/${id}">Order</a>
         <a class="btn btn-outline-primary" href="#/invoices/new/gst/party/${id}">Tax invoice</a>
         <a class="btn btn-outline-secondary" href="#/parties/${id}/edit">Edit</a>
         <button type="button" class="btn btn-outline-primary" data-print>Print statement</button>
