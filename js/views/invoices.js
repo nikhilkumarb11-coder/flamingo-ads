@@ -127,7 +127,9 @@ Views.invoices = {
         <a class="btn btn-outline-secondary" href="${job ? '#/jobs/' + job.id : '#/invoices'}">Cancel</a>
       </div>
     </div></form>`;
+    let editor;
     const paint = () => {
+      if (!editor) return;
       const sub = editor.total();
       const box = el.querySelector('[data-tax]');
       if (taxMode !== 'gst') {
@@ -140,7 +142,7 @@ Views.invoices = {
         <div class="fw-bold">Total ${U.inr(U.round2(sub + t.tax))}</div>
         ${!Store.settings().state ? '<div class="small text-muted">Set the shop state in Settings so inter-state bills use IGST.</div>' : ''}`;
     };
-    const editor = Lines.mount(el.querySelector('[data-lines]'), { items: seed, onChange: paint });
+    editor = Lines.mount(el.querySelector('[data-lines]'), { items: seed, onChange: paint });
     const fill = p => {
       const f = el.querySelector('form');
       if (!f.buyer_name.value) f.buyer_name.value = p.name || '';
