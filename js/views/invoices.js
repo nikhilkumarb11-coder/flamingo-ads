@@ -161,7 +161,9 @@ Views.invoices = {
       e.preventDefault();
       const f = e.target;
       const err = editor.validate();
-      if (!f.party_id.value) return UI.toast('Choose a party', 'warning');
+      const party = Books.takeParty(el.querySelector('[data-party-name]'), f.party_id);
+      if (!party) return UI.toast('Type a party name', 'warning');
+      if (!f.buyer_name.value.trim()) f.buyer_name.value = el.querySelector('[data-party-name]').value.trim();
       if (!f.buyer_name.value.trim()) return UI.toast('Name on the bill is required', 'warning');
       if (f.buyer_gstin.value.trim() && !U.isGstin(f.buyer_gstin.value.trim())) return UI.toast('GSTIN does not look right', 'warning');
       if (err) return UI.toast(err, 'warning');
@@ -171,11 +173,12 @@ Views.invoices = {
       const t = taxMode === 'gst' ? Books.tax(subtotal, f.buyer_state.value) : { rate: 0, cgst: 0, sgst: 0, igst: 0, tax: 0 };
       const invoiceId = U.uuid();
       await Store.saveMany([
+        ...(party.op ? [party.op] : []),
         ['Invoices', {
           id: invoiceId,
           tax_mode: taxMode,
           job_id: job ? job.id : '',
-          party_id: f.party_id.value,
+          party_id: party.id,
           buyer_name: f.buyer_name.value.trim(),
           buyer_phone: f.buyer_phone.value.trim(),
           buyer_gstin: f.buyer_gstin.value.trim().toUpperCase(),

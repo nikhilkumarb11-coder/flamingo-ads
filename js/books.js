@@ -270,11 +270,74 @@ const Books = (() => {
     if (ops.length) await Store.saveMany(ops);
   }
 
+  function partyAlive(p) {
+    return p && p.is_deleted !== true && p.is_deleted !== 'TRUE';
+  }
+
+  function partyByName(name) {
+    const n = String(name || '').trim().toLowerCase();
+    if (!n) return null;
+    return Store.list('Parties').find(p => String(p.name || '').trim().toLowerCase() === n) || null;
+  }
+
+  function partyRow(id, name) {
+    return ['Parties', {
+      id, name, phone: '', gstin: '', state: '', address: '',
+      opening_receivable: 0, opening_payable: 0, notes: ''
+    }];
+  }
+
+  /** Use an existing party when the name matches. Otherwise return a create op for this save. */
+  function takeParty(input, hidden) {
+    const name = input.value.trim();
+    if (!name) return null;
+    const selected = partyAlive(Store.get('Parties', hidden.value));
+    if (selected && selected.name === name) return { id: selected.id };
+    if (hidden.dataset.fresh === '1' && hidden.value && input.dataset.freshName === name) {
+      return { id: hidden.value, op: partyRow(hidden.value, name) };
+    }
+    const found = partyByName(name);
+    if (found) return { id: found.id };
+    const id = U.uuid();
+    return { id, op: partyRow(id, name) };
+  }
+
   function mountParty(input, hidden, initialId, onPick) {
     if (initialId) {
       hidden.value = initialId;
       input.value = partyName(initialId);
     }
+    if (!input.readOnly) input.placeholder = 'Type any name';
+    const hint = document.createElement('div');
+    hint.className = 'form-text';
+    hint.textContent = 'New party. Phone, GSTIN and address can be updated later.';
+    hint.hidden = true;
+
+    function paintHint() {
+      const name = input.value.trim();
+      const selected = partyAlive(Store.get('Parties', hidden.value));
+      const matched = selected && selected.name === name;
+      hint.hidden = !name || matched || !!partyByName(name);
+    }
+
+    function acceptNew(name) {
+      const found = partyByName(name);
+      if (found) {
+        hidden.value = found.id;
+        delete hidden.dataset.fresh;
+        delete input.dataset.freshName;
+        input.value = found.name;
+        if (onPick) onPick(found);
+      } else {
+        if (hidden.dataset.fresh !== '1' || !hidden.value) hidden.value = U.uuid();
+        hidden.dataset.fresh = '1';
+        input.dataset.freshName = name;
+        input.value = name;
+        if (onPick) onPick({ id: hidden.value, name, phone: '', gstin: '', state: '', address: '' });
+      }
+      paintHint();
+    }
+
     Typeahead.attach(input, {
       minChars: 0,
       source: q => {
@@ -286,11 +349,33 @@ const Books = (() => {
       },
       onPick: it => {
         hidden.value = it.value.id;
+        delete hidden.dataset.fresh;
+        delete input.dataset.freshName;
         input.value = it.value.name;
+        paintHint();
         if (onPick) onPick(it.value);
       },
-      footer: () => `<a class="dropdown-item" href="#/parties/new">Add a party</a>`
+      onAdd: acceptNew,
+      footer: q => {
+        const name = q.trim();
+        if (!name || partyByName(name)) return '';
+        return `<button type="button" class="dropdown-item fw-semibold text-primary" data-typeahead-add>Add “${U.esc(name)}”</button>`;
+      }
     });
+    input.parentNode.appendChild(hint);
+    input.addEventListener('input', () => {
+      const name = input.value.trim();
+      const selected = partyAlive(Store.get('Parties', hidden.value));
+      if (selected && selected.name === name) {
+        delete hidden.dataset.fresh;
+      } else if (!(hidden.dataset.fresh === '1' && input.dataset.freshName === name)) {
+        hidden.value = '';
+        delete hidden.dataset.fresh;
+        delete input.dataset.freshName;
+      }
+      paintHint();
+    });
+    paintHint();
   }
 
   function badge(status) {
@@ -313,6 +398,6 @@ const Books = (() => {
     party, partyName, items, billQty, lineAmount, sumItems, childOps, tax,
     paidForInvoice, invoiceDue, activeInvoiceForJob, paidForPurchase, purchaseDue,
     receivable, payable, accountBalance, onHand, lowStock, monthSales, dailySales, reminders, partyStatement,
-    ensureSeed, ensureStock, badge, stateOptions, mountParty
+    ensureSeed, ensureStock, badge, stateOptions, mountParty, takeParty
   };
 })();

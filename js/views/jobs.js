@@ -121,16 +121,18 @@ Views.jobs = {
       e.preventDefault();
       const f = e.target;
       const err = editor.validate();
-      if (!f.party_id.value) return UI.toast('Choose a party', 'warning');
+      const party = Books.takeParty(el.querySelector('[data-party-name]'), f.party_id);
+      if (!party) return UI.toast('Type a party name', 'warning');
       if (err) return UI.toast(err, 'warning');
       const list = editor.getItems();
       const total = Books.sumItems(list);
       const jobId = id || U.uuid();
       const linkEstimate = !id && est ? est.id : ((doc && doc.estimate_id) || '');
       const ops = [
+        ...(party.op ? [party.op] : []),
         ['Jobs', {
           id: jobId,
-          party_id: f.party_id.value,
+          party_id: party.id,
           estimate_id: linkEstimate,
           date: f.date.value,
           due_date: f.due_date.value,

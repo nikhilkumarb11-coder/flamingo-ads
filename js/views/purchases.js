@@ -121,7 +121,8 @@ Views.purchases = {
     el.querySelector('form').addEventListener('submit', async e => {
       e.preventDefault();
       const f = e.target;
-      if (!f.party_id.value) return UI.toast('Choose a supplier', 'warning');
+      const party = Books.takeParty(el.querySelector('[data-party-name]'), f.party_id);
+      if (!party) return UI.toast('Type a supplier name', 'warning');
       const lines = [...box.querySelectorAll('[data-row]')].map(row => {
         const sel = row.querySelector('[data-f="material"]');
         const opt = sel.selectedOptions[0];
@@ -133,7 +134,8 @@ Views.purchases = {
       const total = U.round2(lines.reduce((s, it) => s + it.amount, 0));
       const id = U.uuid();
       await Store.saveMany([
-        ['Purchases', { id, party_id: f.party_id.value, date: f.date.value, subtotal: total, total, status: 'Issued', void_reason: '', notes: f.notes.value.trim() }],
+        ...(party.op ? [party.op] : []),
+        ['Purchases', { id, party_id: party.id, date: f.date.value, subtotal: total, total, status: 'Issued', void_reason: '', notes: f.notes.value.trim() }],
         ...lines.map((it, i) => ['PurchaseItems', { ...it, purchase_id: id, sort: i }])
       ]);
       UI.toast('Purchase saved. Stock is in.');

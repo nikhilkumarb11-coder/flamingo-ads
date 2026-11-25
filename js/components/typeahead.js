@@ -9,7 +9,7 @@
  *   })
  */
 const Typeahead = (() => {
-  function attach(input, { source, onPick, footer, minChars = 0, limit = 8 }) {
+  function attach(input, { source, onPick, footer, onAdd, minChars = 0, limit = 8 }) {
     const wrap = document.createElement('div');
     wrap.className = 'typeahead-wrap';
     input.parentNode.insertBefore(wrap, input);
@@ -37,7 +37,7 @@ const Typeahead = (() => {
         <button type="button" class="dropdown-item typeahead-item" data-i="${i}">
           <div class="text-truncate">${U.esc(it.label)}</div>
           ${it.sub ? `<small class="text-muted text-truncate d-block">${U.esc(it.sub)}</small>` : ''}
-        </button>`).join('') + (foot ? `<div class="dropdown-divider my-1"></div>${foot}` : '');
+        </button>`).join('') + (foot ? `${items.length ? '<div class="dropdown-divider my-1"></div>' : ''}${foot}` : '');
       active = -1;
       menu.classList.add('show');
     }
@@ -74,6 +74,10 @@ const Typeahead = (() => {
     menu.addEventListener('click', e => {
       const btn = e.target.closest('.typeahead-item');
       if (btn) pick(Number(btn.dataset.i));
+      if (e.target.closest('[data-typeahead-add]') && onAdd) {
+        close();
+        onAdd(input.value.trim());
+      }
     });
 
     return { close, refresh: open };
