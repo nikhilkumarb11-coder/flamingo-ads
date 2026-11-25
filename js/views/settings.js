@@ -8,7 +8,7 @@ Views.settings = {
       <div class="col-md-6"><label class="form-label">${label}</label>
         <input class="form-control" name="${name}" type="${type}" value="${U.esc(value || '')}"></div>`;
     el.innerHTML = `
-      ${Api.isLocal() ? `<div class="alert alert-warning">No Google Sheet is connected. These books stay in this browser. When you paste the web app URL into <code>config.js</code>, log out and use Settings → Clear this device before the first shared login, so trial rows are not mixed into the Sheet.</div>` : ''}
+      ${Api.isLocal() ? `<div class="alert alert-warning">No Google Sheet is connected. These books stay in this browser. Paste the Apps Script address below, then log out and use Clear this device before the first shared login, so trial rows are not mixed into the Sheet.</div>` : ''}
       <form class="card mb-3"><div class="card-body">
         <h6>Shop</h6>
         <div class="row g-3">
@@ -73,7 +73,8 @@ Views.settings = {
       if (await App.install.prompt()) return;
       this.render(el);
     });
-    this.loadScript(el);
+    const apiForm = el.querySelector('[data-api]');
+    if (apiForm) apiForm.addEventListener('submit', e => this.saveApiUrl(e));
     el.querySelector('[data-reload]').addEventListener('click', () => Sync.now());
     el.querySelector('[data-logout]').addEventListener('click', () => Auth.logout());
     el.querySelector('[data-clear]').addEventListener('click', async () => {
@@ -144,37 +145,29 @@ Views.settings = {
     }
   },
   scriptCard() {
-    return `<div class="card mb-3"><div class="card-body">
-      <h6>Sheet script</h6>
-      <p class="small text-muted">Copy this, open the Google Sheet, and choose Extensions → Apps Script. Replace the whole script, save, then Deploy → Manage deployments → the pencil → New version → Deploy. The web address stays the same.</p>
-      <textarea class="form-control script-box mb-2" data-script rows="12" readonly placeholder="Loading the script…"></textarea>
-      <button type="button" class="btn btn-outline-primary" data-copy-script disabled>Copy script</button>
-    </div></div>`;
+    const url = Api.apiUrl();
+    const link = /^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(url)
+      ? `<a href="${U.esc(url)}" target="_blank" rel="noopener">${U.esc(url)}</a>`
+      : '';
+    return `<form class="card mb-3" data-api><div class="card-body">
+      <h6>Apps Script</h6>
+      <p class="small text-muted">Paste the web app address from Deploy. It ends in /exec.</p>
+      <input class="form-control" type="url" name="apiUrl" value="${U.esc(url)}" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+      ${link ? `<div class="small mt-2">${link}</div>` : ''}
+      <button class="btn btn-outline-primary mt-3" type="submit">Save address</button>
+    </div></form>`;
   },
-  async loadScript(el) {
-    const box = el.querySelector('[data-script]');
-    const btn = el.querySelector('[data-copy-script]');
-    if (!box || !btn) return;
-    const v = ((document.querySelector('script[src*="js/app.js"]') || {}).src.match(/[?&]v=(\d+)/) || [])[1] || '';
-    try {
-      const res = await fetch('apps-script/Code.gs' + (v ? '?v=' + v : ''), { cache: 'no-store' });
-      if (!res.ok) throw new Error('missing');
-      box.value = await res.text();
-      btn.disabled = false;
-    } catch (e) {
-      box.value = '';
-      box.placeholder = 'The script could not be loaded. Open Settings again when the page has finished loading.';
-      return;
+  saveApiUrl(e) {
+    e.preventDefault();
+    const input = e.target.apiUrl;
+    const next = input.value.trim();
+    const prev = Api.apiUrl();
+    if (next && !/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(next)) {
+      return UI.toast('Paste the Apps Script address that ends in /exec', 'warning');
     }
-    btn.addEventListener('click', async () => {
-      box.focus();
-      box.select();
-      try {
-        await navigator.clipboard.writeText(box.value);
-        UI.toast('Script copied. Paste it into Extensions → Apps Script.');
-      } catch (err) {
-        UI.toast('The script is selected. Copy it, then paste it into Extensions → Apps Script.', 'warning');
-      }
-    });
+    Api.setApiUrl(next);
+    if (Api.apiUrl() === prev) return UI.toast('Address saved');
+    UI.toast('Address saved. Log in again so this device uses it.');
+    Auth.logout();
   }
 };

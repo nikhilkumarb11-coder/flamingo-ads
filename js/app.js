@@ -14,7 +14,7 @@ const App = (() => {
     $('#login-screen').classList.remove('d-none');
     $('#login-password').value = '';
     $('#login-error').classList.add('d-none');
-    if (!APP_CONFIG.apiUrl) {
+    if (!Api.apiUrl()) {
       $('#login-setup-hint').classList.remove('d-none');
     } else {
       $('#login-setup-hint').classList.add('d-none');

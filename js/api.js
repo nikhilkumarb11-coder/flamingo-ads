@@ -255,8 +255,22 @@ const Local = (() => {
 })();
 
 const Api = (() => {
+  const URL_KEY = 'fa_api_url';
+
+  function apiUrl() {
+    const saved = localStorage.getItem(URL_KEY);
+    return String(saved == null ? APP_CONFIG.apiUrl : saved).trim();
+  }
+
+  function setApiUrl(url) {
+    const next = String(url || '').trim();
+    if (!next) localStorage.removeItem(URL_KEY);
+    else localStorage.setItem(URL_KEY, next);
+    return apiUrl();
+  }
+
   async function call(action, payload = {}, { timeoutMs = 45000 } = {}) {
-    const url = APP_CONFIG.apiUrl;
+    const url = apiUrl();
     if (!url) return Local.call(action, payload);
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -293,13 +307,13 @@ const Api = (() => {
 
   let warmedAt = 0;
   function warm() {
-    const url = APP_CONFIG.apiUrl;
+    const url = apiUrl();
     if (!url || Date.now() - warmedAt < 120000) return;
     warmedAt = Date.now();
     fetch(url, { method: 'GET', mode: 'no-cors', cache: 'no-store' }).catch(() => {});
   }
 
-  return { call, warm, isLocal: () => !APP_CONFIG.apiUrl };
+  return { call, warm, apiUrl, setApiUrl, isLocal: () => !apiUrl() };
 })();
 
 const Auth = (() => {
