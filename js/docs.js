@@ -72,6 +72,22 @@ const Docs = (() => {
     </div>`;
   }
 
+  function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+  /** Server-assigned numbers arrive after save. Wait before opening a print that would say Pending. */
+  async function awaitNumber(table, id, field) {
+    let row = Store.get(table, id);
+    if (!row || row[field]) return row;
+    try { await Sync.now(); } catch (e) { /* the row may still arrive */ }
+    const deadline = Date.now() + 8000;
+    while (Date.now() < deadline) {
+      row = Store.get(table, id);
+      if (!row || row[field] || !row._pending) return row;
+      await sleep(200);
+    }
+    return Store.get(table, id);
+  }
+
   function open(inner) {
     const root = document.getElementById('print-root');
     root.innerHTML = `<div class="bill-preview">
@@ -117,8 +133,13 @@ const Docs = (() => {
       if (Number(doc.igst)) rows.push([`IGST`, U.money(doc.igst)]);
     }
     rows.push(['Grand total', `<strong>${U.money(doc.total)}</strong>`]);
-    const paid = Books.paidForInvoice(doc.id);
-    if (paid) rows.push(['Received', U.money(paid)], ['Balance', U.money(Books.invoiceDue(doc))]);
+    const paid = Books.receivedOnInvoice(doc);
+    rows.push(['Received', U.money(paid)], ['Balance', U.money(Books.invoiceDue(doc))]);
+    const payments = (doc.job_id ? Books.orderReceipts(doc.job_id) : Store.list('Receipts').filter(r => r.invoice_id === doc.id && !r.job_id && r.status !== 'Void'))
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const paymentLines = payments.map(r =>
+      `<div>${U.fmtDate(r.date)} · ${U.esc(r.receipt_no || 'Receipt')} · ${U.esc(r.account || '')} · ${U.money(r.amount)}</div>`
+    ).join('');
     open(head(gst ? 'Tax Invoice' : 'Invoice', [
       ['No.', doc.invoice_no || 'Pending'],
       ['Date', U.fmtDate(doc.date)],
@@ -128,15 +149,21 @@ const Docs = (() => {
       + (doc.status === 'Void' ? `<div class="alert alert-danger">Void. ${U.esc(doc.void_reason || '')}</div>` : '')
       + linesTable(list, gst)
       + totals(rows)
+      + (paymentLines ? `<div class="small mt-2"><strong>Payments</strong>${paymentLines}</div>` : '')
       + `<div class="small mt-2">${U.esc(U.inWords(doc.total))}</div>`
       + foot(doc.notes));
   }
 
   function receipt(doc) {
-    const inv = Store.get('Invoices', doc.invoice_id);
+    const order = doc.job_id ? Store.get('Jobs', doc.job_id) : null;
+    const inv = !order && doc.invoice_id ? Store.get('Invoices', doc.invoice_id) : null;
+    const against = order
+      ? ` against order <strong>${U.esc(order.job_no || '')}</strong>`
+      : inv
+        ? ` against ${inv.tax_mode === 'gst' ? 'tax invoice' : 'invoice'} <strong>${U.esc(inv.invoice_no || '')}</strong>`
+        : '';
     open(head('Receipt', [['No.', doc.receipt_no || 'Pending'], ['Date', U.fmtDate(doc.date)]])
-      + `<p>Received ${U.inr(doc.amount)} from <strong>${U.esc(doc.party_id ? Books.partyName(doc.party_id) : '')}</strong>
-        ${inv ? ` against ${inv.tax_mode === 'gst' ? 'tax invoice' : 'invoice'} <strong>${U.esc(inv.invoice_no || '')}</strong>` : ''}
+      + `<p>Received ${U.inr(doc.amount)} from <strong>${U.esc(doc.party_id ? Books.partyName(doc.party_id) : '')}</strong>${against}
         into ${U.esc(doc.account || 'Cash')}.</p>
         <p>${U.esc(U.inWords(doc.amount))}</p>
         ${doc.note ? `<p class="small">${U.esc(doc.note)}</p>` : ''}
@@ -159,5 +186,5 @@ const Docs = (() => {
       + totals([['Balance', `<strong>${U.money(st.balance)}</strong>`]]));
   }
 
-  return { estimate, job, invoice, receipt, statement };
+  return { estimate, job, invoice, receipt, statement, awaitNumber };
 })();

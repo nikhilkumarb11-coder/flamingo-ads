@@ -54,10 +54,7 @@ Views.orders = {
         ${Views.estimates.linesHtml(list)}
         <div class="text-end fw-bold">${U.inr(doc.total)}</div>
       </div></div>
-      ${inv ? '<div data-settle></div>' : `<div class="card mt-3"><div class="card-body">
-        <h6 class="mb-1">Settlement</h6>
-        <p class="text-muted small mb-0">Issue the invoice on this order. The balance can then be received here, in full or in parts.</p>
-      </div></div>`}
+      <div data-settle></div>
       <div class="card mt-3"><div class="card-body">
         <div class="d-flex justify-content-between"><h6 class="mb-2">Material issued</h6><a href="#/issues/new/${id}">Issue material</a></div>
         ${Store.list('Issues').filter(it => it.job_id === id).map(it => {
@@ -68,8 +65,12 @@ Views.orders = {
           </div>`;
         }).join('') || '<div class="text-muted small">Nothing issued yet. Saving the order does not move stock.</div>'}
       </div></div>`;
-    if (inv) Views.receipts.settle(el.querySelector('[data-settle]'), inv, () => this.detail(el, id));
-    el.querySelector('[data-print]').addEventListener('click', () => Docs.job(doc));
+    Views.receipts.settleOrder(el.querySelector('[data-settle]'), doc, () => this.detail(el, id));
+    el.querySelector('[data-print]').addEventListener('click', async () => {
+      const live = await Docs.awaitNumber('Jobs', id, 'job_no');
+      if (!live || !live.job_no) return UI.toast('The order number has not come back yet. Wait for Saved, then print again.', 'warning');
+      Docs.job(live);
+    });
     el.querySelectorAll('[data-unissue]').forEach(btn => btn.addEventListener('click', async () => {
       await Store.remove('Issues', btn.dataset.unissue);
       UI.toast('Issue removed. Stock is back.');

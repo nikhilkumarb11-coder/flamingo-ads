@@ -2,7 +2,7 @@
  * Keeps the app shell on the device. Data never goes through here.
  * Bump VERSION together with ?v= in index.html.
  */
-const VERSION = '9';
+const VERSION = '12';
 const CACHE = 'flamingo-app-v' + VERSION;
 const CDN_HOSTS = ['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 

@@ -7,6 +7,7 @@
  * Replies: { ok: true, ... } or { ok: false, code, message }.
  *
  * Invoice numbers are assigned here, inside a lock.
+ * A receipt can name an order and does not need an invoice.
  * GST and non-GST bills use different counters and never share a sequence.
  * Financial year is April–March: GST/2026-27/001 and BILL/2026-27/001.
  */
@@ -26,7 +27,7 @@ var SCHEMA = {
   JobItems:      ['job_id', 'item_name', 'width', 'height', 'qty', 'unit', 'rate', 'amount', 'hsn', 'sort'],
   Invoices:      ['invoice_no', 'tax_mode', 'job_id', 'party_id', 'buyer_name', 'buyer_phone', 'buyer_gstin', 'buyer_address', 'buyer_state', 'date', 'subtotal', 'gst_rate', 'cgst', 'sgst', 'igst', 'tax_amount', 'total', 'status', 'void_reason', 'notes'],
   InvoiceItems:  ['invoice_id', 'item_name', 'width', 'height', 'qty', 'unit', 'rate', 'amount', 'hsn', 'sort'],
-  Receipts:      ['receipt_no', 'invoice_id', 'party_id', 'date', 'amount', 'account', 'note', 'status'],
+  Receipts:      ['receipt_no', 'invoice_id', 'party_id', 'date', 'amount', 'account', 'note', 'status', 'job_id'],
   Materials:     ['name', 'unit', 'opening_qty', 'reorder_level', 'purchase_rate', 'active', 'notes'],
   Purchases:     ['purchase_no', 'party_id', 'date', 'subtotal', 'total', 'status', 'void_reason', 'notes'],
   PurchaseItems: ['purchase_id', 'material_id', 'item_name', 'qty', 'unit', 'rate', 'amount', 'sort'],
@@ -136,14 +137,23 @@ var VALIDATORS = {
       if (row.status !== 'Void') throw invalid_('A receipt can only be voided');
       return;
     }
-    if (!row.invoice_id) throw invalid_('Receipt is missing its invoice');
-    var inv = findRow_(ctx, 'Invoices', row.invoice_id);
-    if (!inv || inv.is_deleted || inv.status === 'Void') throw invalid_('Invoice not found');
     if (!(Number(row.amount) > 0)) throw invalid_('Amount must be more than 0');
-    var due = round2_(Number(inv.total) - paidForInvoice_(ctx, row.invoice_id));
-    if (Number(row.amount) > due + 0.001) throw invalid_('Amount is more than the balance of ₹' + due);
     if (!row.account) row.account = 'Cash';
     row.status = '';
+    if (row.job_id) {
+      var job = findRow_(ctx, 'Jobs', row.job_id);
+      if (!job || job.is_deleted) throw invalid_('Order not found');
+      if (job.status === 'Cancelled') throw invalid_('This order is cancelled');
+      if (!row.party_id) row.party_id = job.party_id;
+      var orderDue = round2_(collectable_(ctx, job) - paidForOrder_(ctx, row.job_id));
+      if (Number(row.amount) > orderDue + 0.001) throw invalid_('Amount is more than the balance of ₹' + orderDue);
+      return;
+    }
+    if (!row.invoice_id) throw invalid_('Receipt needs an order or an invoice');
+    var inv = findRow_(ctx, 'Invoices', row.invoice_id);
+    if (!inv || inv.is_deleted || inv.status === 'Void') throw invalid_('Invoice not found');
+    var due = round2_(Number(inv.total) - paidForInvoice_(ctx, row.invoice_id));
+    if (Number(row.amount) > due + 0.001) throw invalid_('Amount is more than the balance of ₹' + due);
   },
   Settings: function (row) {
     if (!row.key) throw invalid_('Setting key is required');
@@ -219,10 +229,32 @@ function activeInvoiceForJob_(ctx, jobId) {
 
 function paidForInvoice_(ctx, invoiceId) {
   var sum = tableCtx_(ctx, 'Receipts').rows.reduce(function (s, r) {
-    if (r.invoice_id !== invoiceId || r.is_deleted || r.status === 'Void') return s;
+    if (r.invoice_id !== invoiceId || r.job_id || r.is_deleted || r.status === 'Void') return s;
     return s + (Number(r.amount) || 0);
   }, 0);
   return round2_(sum);
+}
+
+function paidForOrder_(ctx, jobId) {
+  var sum = 0;
+  tableCtx_(ctx, 'Receipts').rows.forEach(function (r) {
+    if (r.is_deleted || r.status === 'Void') return;
+    if (r.job_id === jobId) { sum += Number(r.amount) || 0; return; }
+    if (!r.job_id && r.invoice_id) {
+      var inv = findRow_(ctx, 'Invoices', r.invoice_id);
+      if (inv && inv.job_id === jobId) sum += Number(r.amount) || 0;
+    }
+  });
+  return round2_(sum);
+}
+
+function collectable_(ctx, job) {
+  var orderTotal = Number(job.total) || 0;
+  var billTotal = 0;
+  tableCtx_(ctx, 'Invoices').rows.forEach(function (i) {
+    if (i.job_id === job.id && !i.is_deleted && i.status !== 'Void') billTotal = Number(i.total) || 0;
+  });
+  return round2_(Math.max(orderTotal, billTotal));
 }
 
 function paidForPurchase_(ctx, purchaseId) {
@@ -281,6 +313,7 @@ function doPost(e) {
     var user = String(req.device || 'app').slice(0, 40);
     switch (req.action) {
       case 'ping': return json_({ ok: true, serverTime: nowIso_() });
+      case 'changePassword': return json_(changePassword_(req));
       case 'sync': return json_(sync_(req.since));
       case 'batch': {
         var ctx = {};
@@ -345,6 +378,7 @@ function sha256Hex_(text) {
 }
 
 function sync_(since, ctx) {
+  if (!ctx) fillMissingNumbers_();
   if (!since) {
     var cached = fullCacheGet_();
     if (cached) return cached;
@@ -411,6 +445,7 @@ function batch_(ops, user, ctx) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) throw error_('BUSY', 'Server busy, will retry');
   try {
+    fillMissingNumbersInto_(ctx);
     var results = ops.map(function (op) {
       try { return applyOp_(op, ctx, user); }
       catch (err) {
@@ -522,6 +557,52 @@ function setting_(ctx, key, fallback) {
   return fallback;
 }
 
+/** Gives a number to any saved document that never received one, then writes it back. */
+function fillMissingNumbers_() {
+  var stored = props_();
+  var pending = Object.keys(AUTO_NUMBERS).some(function (table) { return stored['numbered_ok_' + table] !== '1'; });
+  if (!pending) return;
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return;
+  try { fillMissingNumbersInto_({}); }
+  finally { lock.releaseLock(); }
+}
+
+function fillMissingNumbersInto_(ctx) {
+  var dirtyNames = [];
+  var stored = props_();
+  Object.keys(AUTO_NUMBERS).forEach(function (table) {
+    if (stored['numbered_ok_' + table] === '1' && !ctx[table]) return;
+    var t = ctx[table] || readTable_(table);
+    ctx[table] = t;
+    var field = AUTO_NUMBERS[table];
+    var changed = false;
+    t.rows.forEach(function (row, idx) {
+      if (row.is_deleted || row[field]) return;
+      assignNumber_(table, row, ctx);
+      row.updated_at = nowIso_();
+      row.updated_by = row.updated_by || 'number';
+      if (row.__row) t.updatedIdx[idx] = true;
+      changed = true;
+    });
+    if (!changed) {
+      PropertiesService.getScriptProperties().setProperty('numbered_ok_' + table, '1');
+      stored['numbered_ok_' + table] = '1';
+      return;
+    }
+    t.dirty = true;
+    writeTable_(t);
+    dirtyNames.push(table);
+  });
+  if (!dirtyNames.length) return;
+  SpreadsheetApp.flush();
+  var now = nowIso_();
+  var mods = {};
+  dirtyNames.forEach(function (name) { mods['mod_' + name] = now; });
+  PropertiesService.getScriptProperties().setProperties(mods);
+  Object.assign(props_(), mods);
+}
+
 function assignNumber_(table, row, ctx) {
   var field = AUTO_NUMBERS[table];
   if (!field) return;
@@ -583,6 +664,7 @@ function readTable_(table) {
   var ss = activeSpreadsheetOrThrow_();
   var sh = ss.getSheetByName(table);
   if (!sh) throw error_('NOT_SET_UP', 'Sheet tab "' + table + '" missing. Run Flamingo Ads → Run setup.');
+  if (SCHEMA[table]) ensureColumns_(sh, headersFor_(table));
   var values = sh.getDataRange().getValues();
   var headers = (values[0] || []).map(function (h) { return String(h || '').trim(); });
   var headerCount = headers.length;
@@ -806,18 +888,48 @@ function seedMaterials_() {
   PropertiesService.getScriptProperties().setProperty('mod_Materials', now);
 }
 
+function storePassword_(pw) {
+  var salt = Utilities.getUuid();
+  var secret = Utilities.getUuid() + Utilities.getUuid();
+  var hash = sha256Hex_(salt + pw);
+  PropertiesService.getScriptProperties().setProperties({
+    PASSWORD_SALT: salt,
+    PASSWORD_HASH: hash,
+    TOKEN_SECRET: secret
+  });
+  var stored = props_();
+  stored.PASSWORD_SALT = salt;
+  stored.PASSWORD_HASH = hash;
+  stored.TOKEN_SECRET = secret;
+}
+
+function changePassword_(req) {
+  var current = String(req.current || '');
+  var next = String(req.next || '');
+  var cache = CacheService.getScriptCache();
+  var fails = Number(cache.get('login_fails') || 0);
+  if (fails >= MAX_LOGIN_FAILS) return { ok: false, code: 'LOCKED', message: 'Too many wrong attempts. Try again in 15 minutes.' };
+  var salt = props_().PASSWORD_SALT;
+  var hash = props_().PASSWORD_HASH;
+  if (!salt || !hash) return { ok: false, code: 'NOT_SET_UP', message: 'App password not set. Open the Sheet → Flamingo Ads menu → Set app password.' };
+  if (sha256Hex_(salt + current) !== hash) {
+    cache.put('login_fails', String(fails + 1), 15 * 60);
+    return { ok: false, code: 'WRONG_PASSWORD', message: 'Current password is wrong' };
+  }
+  if (next.length < 6) return { ok: false, code: 'INVALID', message: 'New password must be at least 6 characters' };
+  if (next === current) return { ok: false, code: 'INVALID', message: 'Choose a different password' };
+  cache.remove('login_fails');
+  storePassword_(next);
+  return { ok: true };
+}
+
 function promptSetPassword() {
   var ui = SpreadsheetApp.getUi();
   var res = ui.prompt('Set app password', 'Password everyone will use to log in (min 6 characters):', ui.ButtonSet.OK_CANCEL);
   if (res.getSelectedButton() !== ui.Button.OK) return;
   var pw = res.getResponseText();
   if (!pw || pw.length < 6) { ui.alert('Password must be at least 6 characters.'); return; }
-  var salt = Utilities.getUuid();
-  PropertiesService.getScriptProperties().setProperties({
-    PASSWORD_SALT: salt,
-    PASSWORD_HASH: sha256Hex_(salt + pw),
-    TOKEN_SECRET: Utilities.getUuid() + Utilities.getUuid()
-  });
+  storePassword_(pw);
   ui.alert('Password set. Every device must log in again.');
 }
 

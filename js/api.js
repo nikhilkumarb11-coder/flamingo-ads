@@ -103,13 +103,23 @@ const Local = (() => {
         if (next.status !== 'Void') fail('A receipt can only be voided');
         return;
       }
-      if (!next.invoice_id) fail('Receipt is missing its invoice');
+      if (!(Number(next.amount) > 0)) fail('Amount must be more than 0');
+      if (!next.account) next.account = 'Cash';
+      next.status = '';
+      if (next.job_id) {
+        const job = Store.get('Jobs', next.job_id);
+        if (!job || job.is_deleted) fail('Order not found');
+        if (job.status === 'Cancelled') fail('This order is cancelled');
+        if (!next.party_id) next.party_id = job.party_id;
+        const due = Books.orderDue(job, next.id);
+        if (Number(next.amount) > due + 0.001) fail('Amount is more than the balance of ' + U.inr(due));
+        return;
+      }
+      if (!next.invoice_id) fail('Receipt needs an order or an invoice');
       const inv = Store.get('Invoices', next.invoice_id);
       if (!inv || inv.is_deleted || inv.status === 'Void') fail('Invoice not found');
-      if (!(Number(next.amount) > 0)) fail('Amount must be more than 0');
       const due = Books.invoiceDue(inv, next.id);
       if (Number(next.amount) > due + 0.001) fail('Amount is more than the balance of ' + U.inr(due));
-      next.status = '';
     }
     if (table === 'Materials') {
       if (!next.name) fail('Material name is required');
@@ -214,6 +224,16 @@ const Local = (() => {
           expiresAt: Date.now() + 30 * 86400000,
           sync: { ok: true, serverTime: U.nowIso(), full: true, tables: {} }
         };
+      }
+      if (action === 'changePassword') {
+        const saved = localStorage.getItem(PASS_KEY) || '';
+        const current = String(payload.current || '');
+        const next = String(payload.next || '');
+        if (!saved || saved !== current) throw new ApiError('WRONG_PASSWORD', 'Current password is wrong');
+        if (next.length < 6) throw new ApiError('INVALID', 'New password must be at least 6 characters');
+        if (next === current) throw new ApiError('INVALID', 'Choose a different password');
+        localStorage.setItem(PASS_KEY, next);
+        return { ok: true };
       }
       if (action === 'sync' || action === 'ping') {
         return { ok: true, serverTime: U.nowIso(), full: !payload.since, tables: {} };

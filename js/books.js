@@ -75,13 +75,48 @@ const Books = (() => {
 
   function paidForInvoice(invoiceId, exceptId) {
     return U.round2(Store.list('Receipts')
-      .filter(r => r.invoice_id === invoiceId && r.status !== 'Void' && r.id !== exceptId)
+      .filter(r => r.invoice_id === invoiceId && !r.job_id && r.status !== 'Void' && r.id !== exceptId)
       .reduce((s, r) => s + (Number(r.amount) || 0), 0));
+  }
+
+  /** Payments recorded on the order, plus older receipts that only named its invoice. */
+  function orderReceipts(jobId, exceptId) {
+    return Store.list('Receipts').filter(r => {
+      if (r.status === 'Void' || r.id === exceptId) return false;
+      if (r.job_id === jobId) return true;
+      if (!r.job_id && r.invoice_id) {
+        const inv = Store.get('Invoices', r.invoice_id);
+        return !!(inv && inv.job_id === jobId);
+      }
+      return false;
+    });
+  }
+
+  function paidForOrder(jobId, exceptId) {
+    return U.round2(orderReceipts(jobId, exceptId).reduce((s, r) => s + (Number(r.amount) || 0), 0));
+  }
+
+  /** Order total, or the invoice total when GST makes the bill higher. */
+  function collectable(job) {
+    if (!job) return 0;
+    const inv = activeInvoiceForJob(job.id);
+    return U.round2(Math.max(Number(job.total) || 0, inv ? Number(inv.total) || 0 : 0));
+  }
+
+  function orderDue(job, exceptId) {
+    if (!job || job.status === 'Cancelled') return 0;
+    return U.round2(Math.max(0, collectable(job) - paidForOrder(job.id, exceptId)));
+  }
+
+  function receivedOnInvoice(inv) {
+    if (!inv) return 0;
+    return inv.job_id ? paidForOrder(inv.job_id) : paidForInvoice(inv.id);
   }
 
   function invoiceDue(inv, exceptId) {
     if (!inv || inv.status === 'Void') return 0;
-    return U.round2(Math.max(0, (Number(inv.total) || 0) - paidForInvoice(inv.id, exceptId)));
+    const paid = inv.job_id ? paidForOrder(inv.job_id, exceptId) : paidForInvoice(inv.id, exceptId);
+    return U.round2(Math.max(0, (Number(inv.total) || 0) - paid));
   }
 
   function activeInvoiceForJob(jobId) {
@@ -396,7 +431,7 @@ const Books = (() => {
   return {
     JOB_STATUSES, EST_STATUSES, UNITS, MATERIAL_UNITS, EXPENSE_CATEGORIES, STATES, DEFAULT_TERMS,
     party, partyName, items, billQty, lineAmount, sumItems, childOps, tax,
-    paidForInvoice, invoiceDue, activeInvoiceForJob, paidForPurchase, purchaseDue,
+    paidForInvoice, orderReceipts, paidForOrder, collectable, orderDue, receivedOnInvoice, invoiceDue, activeInvoiceForJob, paidForPurchase, purchaseDue,
     receivable, payable, accountBalance, onHand, lowStock, monthSales, dailySales, reminders, partyStatement,
     ensureSeed, ensureStock, badge, stateOptions, mountParty, takeParty
   };

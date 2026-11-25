@@ -123,6 +123,11 @@ const Store = (() => {
       rows.forEach(srv => {
         const patch = pendingPatch(t, srv.id);
         const row = { ...srv, ...(patch || {}), _srv: srv.updated_at, _pending: !!patch };
+        const numbered = {
+          Estimates: 'estimate_no', Jobs: 'job_no', Invoices: 'invoice_no', Receipts: 'receipt_no',
+          Purchases: 'purchase_no', PaymentsOut: 'payment_no', Expenses: 'expense_no'
+        }[t];
+        if (numbered && srv[numbered] && !row[numbered]) row[numbered] = srv[numbered];
         data[t].set(srv.id, row);
         writes.push([t, row]);
       });

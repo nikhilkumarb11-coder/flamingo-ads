@@ -45,7 +45,9 @@ Views.settings = {
         </div>
         <button class="btn btn-primary mt-3" type="submit">Save settings</button>
       </div></form>
+      ${this.passwordCard()}
       ${this.installCard()}
+      ${this.scriptCard()}
       <div class="card"><div class="card-body d-flex flex-wrap gap-2">
         <button type="button" class="btn btn-outline-primary" data-reload>Reload from server</button>
         <button type="button" class="btn btn-outline-danger" data-clear>Clear this device</button>
@@ -65,11 +67,13 @@ Views.settings = {
       }]));
       UI.toast('Settings saved');
     });
+    el.querySelector('[data-password]').addEventListener('submit', e => this.changePassword(e));
     const installBtn = el.querySelector('#install-btn');
     if (installBtn) installBtn.addEventListener('click', async () => {
       if (await App.install.prompt()) return;
       this.render(el);
     });
+    this.loadScript(el);
     el.querySelector('[data-reload]').addEventListener('click', () => Sync.now());
     el.querySelector('[data-logout]').addEventListener('click', () => Auth.logout());
     el.querySelector('[data-clear]').addEventListener('click', async () => {
@@ -103,5 +107,74 @@ Views.settings = {
       body = '<p class="small text-muted mb-0">Open the browser menu and choose <b>Install app</b> or <b>Add to Home screen</b>.</p>';
     }
     return `<div class="card mb-3"><div class="card-body"><h6>Install on this device</h6>${body}</div></div>`;
+  },
+  passwordCard() {
+    return `<form class="card mb-3" data-password><div class="card-body">
+      <h6>Password</h6>
+      <p class="small text-muted">This is the password every device uses to log in. After a change, each device logs in again.</p>
+      <div class="row g-3">
+        <div class="col-md-4"><label class="form-label">Current password</label>
+          <input class="form-control" type="password" name="current" autocomplete="current-password" required></div>
+        <div class="col-md-4"><label class="form-label">New password</label>
+          <input class="form-control" type="password" name="next" autocomplete="new-password" required></div>
+        <div class="col-md-4"><label class="form-label">Repeat new password</label>
+          <input class="form-control" type="password" name="again" autocomplete="new-password" required></div>
+      </div>
+      <button class="btn btn-outline-primary mt-3" type="submit">Change password</button>
+    </div></form>`;
+  },
+  async changePassword(e) {
+    e.preventDefault();
+    const f = e.target;
+    const current = f.current.value;
+    const next = f.next.value;
+    const btn = f.querySelector('button');
+    if (next !== f.again.value) return UI.toast('Type the new password again', 'warning');
+    if (next.length < 6) return UI.toast('New password must be at least 6 characters', 'warning');
+    if (next === current) return UI.toast('Choose a different password', 'warning');
+    btn.disabled = true;
+    try {
+      await Api.call('changePassword', { current, next });
+      f.reset();
+      UI.toast(Api.isLocal() ? 'Password changed on this device' : 'Password changed. Log in with the new one.');
+      if (!Api.isLocal()) await Auth.logout();
+    } catch (err) {
+      UI.toast(err.message || 'Could not change the password', 'warning');
+      btn.disabled = false;
+    }
+  },
+  scriptCard() {
+    return `<div class="card mb-3"><div class="card-body">
+      <h6>Sheet script</h6>
+      <p class="small text-muted">Copy this, open the Google Sheet, and choose Extensions → Apps Script. Replace the whole script, save, then Deploy → Manage deployments → the pencil → New version → Deploy. The web address stays the same.</p>
+      <textarea class="form-control script-box mb-2" data-script rows="12" readonly placeholder="Loading the script…"></textarea>
+      <button type="button" class="btn btn-outline-primary" data-copy-script disabled>Copy script</button>
+    </div></div>`;
+  },
+  async loadScript(el) {
+    const box = el.querySelector('[data-script]');
+    const btn = el.querySelector('[data-copy-script]');
+    if (!box || !btn) return;
+    const v = ((document.querySelector('script[src*="js/app.js"]') || {}).src.match(/[?&]v=(\d+)/) || [])[1] || '';
+    try {
+      const res = await fetch('apps-script/Code.gs' + (v ? '?v=' + v : ''), { cache: 'no-store' });
+      if (!res.ok) throw new Error('missing');
+      box.value = await res.text();
+      btn.disabled = false;
+    } catch (e) {
+      box.value = '';
+      box.placeholder = 'The script could not be loaded. Open Settings again when the page has finished loading.';
+      return;
+    }
+    btn.addEventListener('click', async () => {
+      box.focus();
+      box.select();
+      try {
+        await navigator.clipboard.writeText(box.value);
+        UI.toast('Script copied. Paste it into Extensions → Apps Script.');
+      } catch (err) {
+        UI.toast('The script is selected. Copy it, then paste it into Extensions → Apps Script.', 'warning');
+      }
+    });
   }
 };

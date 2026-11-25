@@ -24,7 +24,7 @@ Views.invoices = {
       <div class="table-responsive"><table class="table">
         <thead><tr><th>No.</th><th>Party</th><th>Series</th><th>Date</th><th class="text-end">Total</th><th class="text-end">Due</th></tr></thead>
         <tbody>${rows.map(i => `<tr>
-          <td><a href="#/invoices/${i.id}">${U.esc(i.invoice_no || 'Pending')}</a>${i.status === 'Void' ? ' ' + Books.badge('Void') : ''}</td>
+          <td><a href="#/invoices/${i.id}">${U.esc(i.invoice_no || (i._pending ? 'Waiting' : '—'))}</a>${i.status === 'Void' ? ' ' + Books.badge('Void') : ''}</td>
           <td>${U.esc(i.buyer_name || '')}</td>
           <td>${i.tax_mode === 'gst' ? 'GST' : 'Without GST'}</td>
           <td>${U.fmtDate(i.date)}</td>
@@ -37,10 +37,11 @@ Views.invoices = {
   detail(el, id) {
     const doc = Store.get('Invoices', id);
     if (!doc || doc.is_deleted) { el.innerHTML = `<div class="alert alert-warning">Invoice not found.</div>`; return; }
-    document.getElementById('page-title').textContent = doc.invoice_no || 'Invoice';
+    document.getElementById('page-title').textContent = doc.invoice_no || (doc._pending ? 'Waiting for number' : 'Invoice');
     const list = Books.items('InvoiceItems', 'invoice_id', id);
     const due = Books.invoiceDue(doc);
-    const paid = Books.paidForInvoice(id);
+    const paid = Books.receivedOnInvoice(doc);
+    const number = doc.invoice_no || (doc._pending ? 'Waiting for number' : 'Number missing');
     el.innerHTML = `<div class="d-flex flex-wrap gap-2 mb-3">
         <button type="button" class="btn btn-primary" data-print>${doc.tax_mode === 'gst' ? 'Print tax invoice' : 'Print invoice'}</button>
         ${doc.status !== 'Void' ? `<button type="button" class="btn btn-outline-danger" data-void>Void</button>` : ''}
@@ -50,7 +51,7 @@ Views.invoices = {
         <div class="d-flex justify-content-between">
           <div>
             <div class="fw-semibold">${U.esc(doc.buyer_name)}</div>
-            <div class="small text-muted">${U.fmtDate(doc.date)} · ${doc.tax_mode === 'gst' ? 'Tax invoice' : 'Invoice without GST'}</div>
+            <div class="small text-muted">${U.esc(number)} · ${U.fmtDate(doc.date)} · ${doc.tax_mode === 'gst' ? 'Tax invoice' : 'Invoice without GST'}</div>
           </div>
           ${Books.badge(doc.status === 'Void' ? 'Void' : due <= 0 ? 'Paid' : paid > 0 ? 'Partial' : 'Unpaid')}
         </div>
@@ -64,8 +65,13 @@ Views.invoices = {
         </div>
       </div></div>
       <div data-settle></div>`;
-    if (doc.status !== 'Void') Views.receipts.settle(el.querySelector('[data-settle]'), doc, () => this.detail(el, id));
-    el.querySelector('[data-print]').addEventListener('click', () => Docs.invoice(doc));
+    if (doc.status !== 'Void' && doc.job_id) Views.receipts.showOnInvoice(el.querySelector('[data-settle]'), doc);
+    else if (doc.status !== 'Void') Views.receipts.settle(el.querySelector('[data-settle]'), doc, () => this.detail(el, id));
+    el.querySelector('[data-print]').addEventListener('click', async () => {
+      const live = await Docs.awaitNumber('Invoices', id, 'invoice_no');
+      if (!live || !live.invoice_no) return UI.toast('The invoice number has not come back yet. Wait for Saved, then print again.', 'warning');
+      Docs.invoice(live);
+    });
     const voidBtn = el.querySelector('[data-void]');
     if (voidBtn) voidBtn.addEventListener('click', async () => {
       const reason = await UI.promptText({ title: 'Void invoice', message: 'The number stays used. Issue a new invoice if you still need to bill this order.', label: 'Reason', confirmText: 'Void invoice', danger: true });

@@ -1417,6 +1417,13 @@ body:has(.form-card) .fab-wrap { display: none; }
 .bill-sheet table { width: 100%; border-collapse: collapse; }
 .bill-sheet th, .bill-sheet td { border-bottom: 1px solid #efe8f2; padding: 0.4rem 0.35rem; font-size: 0.86rem; vertical-align: top; }
 .bill-sheet th { font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; color: #6d6478; }
+.script-box {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  resize: vertical;
+  min-height: 12rem;
+}
 .bill-actions { width: min(800px, 100%); margin: 0 auto 0.75rem; display: flex; justify-content: flex-end; gap: 0.5rem; }
 @media print {
   body * { visibility: hidden !important; }
