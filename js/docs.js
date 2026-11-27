@@ -101,15 +101,213 @@ const Docs = (() => {
     root.querySelector('[data-print]').addEventListener('click', () => window.print());
   }
 
+  const STATE_CODE = {
+    'Jammu and Kashmir': '01', 'Himachal Pradesh': '02', 'Punjab': '03', 'Chandigarh': '04', 'Uttarakhand': '05',
+    'Haryana': '06', 'Delhi': '07', 'Rajasthan': '08', 'Uttar Pradesh': '09', 'Bihar': '10', 'Sikkim': '11',
+    'Arunachal Pradesh': '12', 'Nagaland': '13', 'Manipur': '14', 'Mizoram': '15', 'Tripura': '16', 'Meghalaya': '17',
+    'Assam': '18', 'West Bengal': '19', 'Jharkhand': '20', 'Odisha': '21', 'Chhattisgarh': '22', 'Madhya Pradesh': '23',
+    'Gujarat': '24', 'Dadra and Nagar Haveli and Daman and Diu': '26', 'Maharashtra': '27', 'Karnataka': '29', 'Goa': '30',
+    'Lakshadweep': '31', 'Kerala': '32', 'Tamil Nadu': '33', 'Puducherry': '34', 'Andaman and Nicobar Islands': '35',
+    'Telangana': '36', 'Andhra Pradesh': '37', 'Ladakh': '38'
+  };
+
+  function stateLabel(name) {
+    const n = String(name || '').trim();
+    if (!n) return '';
+    return STATE_CODE[n] ? STATE_CODE[n] + '-' + n : n;
+  }
+
+  function dmy(ymd) {
+    const m = String(ymd || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : (ymd ? U.fmtDate(ymd) : '');
+  }
+
+  function rupee(n) { return '₹ ' + U.money(n); }
+
+  function unitText(it) {
+    const u = String(it.unit || '').trim();
+    return !u || u === 'pcs' ? '-' : u;
+  }
+
+  function qtyText(n) {
+    const v = U.round2(n);
+    return v % 1 ? String(v) : String(v);
+  }
+
+  function firmBlock() {
+    const f = firm();
+    return `<tr><td colspan="2"><div class="sheet-firm">
+      <img src="${APP_CONFIG.logo}" alt="">
+      <div style="flex:1">
+        <div class="sheet-firm-name">${U.esc(f.name)}</div>
+        <div>${U.esc(f.address)}</div>
+        <div class="sheet-firm-meta">
+          <div>${f.phone ? 'Phone: ' + U.esc(f.phone) : ''}${f.gstin ? '<br>GSTIN: ' + U.esc(f.gstin) : ''}</div>
+          <div>${f.email ? 'Email: ' + U.esc(f.email) : ''}${f.state ? '<br>State: ' + U.esc(stateLabel(f.state)) : ''}</div>
+        </div>
+      </div>
+    </div></td></tr>`;
+  }
+
+  function partyCell(label, who) {
+    return `<td>
+      <div class="sheet-label">${U.esc(label)}</div>
+      <div class="sheet-party">${U.esc(who.name || '')}</div>
+      ${who.address ? `<div>${U.esc(who.address)}</div>` : ''}
+      ${who.phone ? `<div>Contact No: ${U.esc(who.phone)}</div>` : ''}
+      ${who.state ? `<div>State: ${U.esc(stateLabel(who.state))}</div>` : ''}
+      ${who.gstin ? `<div>GSTIN Number: ${U.esc(who.gstin)}</div>` : ''}
+    </td>`;
+  }
+
+  function detailsCell(label, rows) {
+    return `<td>
+      <div class="sheet-label">${U.esc(label)}</div>
+      ${rows.map(r => `<div>${U.esc(r[0])}: ${U.esc(r[1] || '')}</div>`).join('')}
+    </td>`;
+  }
+
+  function pricedLines(list, rate) {
+    return list.map((it, i) => {
+      const taxable = U.round2(Number(it.amount) || 0);
+      const tax = rate ? U.round2(taxable * rate / 100) : 0;
+      return {
+        n: i + 1, name: it.item_name || '', hsn: it.hsn || '', qty: Books.billQty(it), unit: unitText(it),
+        rate: Number(it.rate) || 0, taxable, tax, gross: U.round2(taxable + tax)
+      };
+    });
+  }
+
+  function taxGroups(lines, rate, inter) {
+    const groups = [];
+    lines.forEach(line => {
+      let g = groups.find(x => x.hsn === line.hsn);
+      if (!g) { g = { hsn: line.hsn, taxable: 0 }; groups.push(g); }
+      g.taxable = U.round2(g.taxable + line.taxable);
+    });
+    return groups.map(g => {
+      const tax = U.round2(g.taxable * rate / 100);
+      if (inter) return { ...g, igst: tax, tax };
+      const cgst = U.round2(tax / 2);
+      return { ...g, cgst, sgst: U.round2(tax - cgst), tax };
+    });
+  }
+
+  function fitTax(lines, groups, taxAmount) {
+    const target = U.round2(taxAmount);
+    const sum = U.round2(lines.reduce((s, r) => s + r.tax, 0));
+    const diff = U.round2(target - sum);
+    if (lines.length && diff) {
+      const last = lines[lines.length - 1];
+      last.tax = U.round2(last.tax + diff);
+      last.gross = U.round2(last.taxable + last.tax);
+    }
+    const gsum = U.round2(groups.reduce((s, r) => s + r.tax, 0));
+    const gdiff = U.round2(target - gsum);
+    if (groups.length && gdiff) {
+      const last = groups[groups.length - 1];
+      last.tax = U.round2(last.tax + gdiff);
+      if (last.igst != null) last.igst = last.tax;
+      else { last.cgst = U.round2(last.tax / 2); last.sgst = U.round2(last.tax - last.cgst); }
+    }
+  }
+
+  function moneyTable(lines, gst, rate) {
+    const head = `<tr>
+      <th>#</th><th>Item name</th><th>HSN/ SAC</th><th class="sheet-num">Quantity</th><th>Unit</th>
+      <th class="sheet-num">Price/ Unit (₹)</th>${gst ? '<th class="sheet-num">GST(₹)</th>' : ''}
+      <th class="sheet-num">Amount(₹)</th></tr>`;
+    const body = lines.map(it => `<tr>
+      <td>${it.n}</td>
+      <td class="sheet-item">${U.esc(it.name)}</td>
+      <td>${U.esc(it.hsn)}</td>
+      <td class="sheet-num">${qtyText(it.qty)}</td>
+      <td>${U.esc(it.unit)}</td>
+      <td class="sheet-num">${rupee(it.rate)}</td>
+      ${gst ? `<td class="sheet-num">${rupee(it.tax)}<br>(${Number(rate).toFixed(1)}%)</td>` : ''}
+      <td class="sheet-num">${rupee(gst ? it.gross : it.taxable)}</td>
+    </tr>`).join('');
+    const qty = U.round2(lines.reduce((s, it) => s + it.qty, 0));
+    const tax = U.round2(lines.reduce((s, it) => s + it.tax, 0));
+    const gross = U.round2(lines.reduce((s, it) => s + (gst ? it.gross : it.taxable), 0));
+    const total = `<tr>
+      <td></td><td class="sheet-item">Total</td><td></td>
+      <td class="sheet-num">${qtyText(qty)}</td><td></td><td></td>
+      ${gst ? `<td class="sheet-num">${rupee(tax)}</td>` : ''}
+      <td class="sheet-num">${rupee(gross)}</td>
+    </tr>`;
+    return { html: `<table class="sheet-box">${head}${body}${total}</table>`, gross, tax };
+  }
+
+  function taxSummary(groups, inter) {
+    if (!groups.length) return '';
+    const head = inter
+      ? `<tr><th rowspan="2">HSN/ SAC</th><th rowspan="2">Taxable amount (₹)</th><th colspan="2">IGST</th><th rowspan="2">Total Tax(₹)</th></tr>
+         <tr><th>Rate (%)</th><th>Amt (₹)</th></tr>`
+      : `<tr><th rowspan="2">HSN/ SAC</th><th rowspan="2">Taxable amount (₹)</th><th colspan="2">CGST</th><th colspan="2">SGST</th><th rowspan="2">Total Tax(₹)</th></tr>
+         <tr><th>Rate (%)</th><th>Amt (₹)</th><th>Rate (%)</th><th>Amt (₹)</th></tr>`;
+    const half = n => (Number(n) / 2);
+    const body = groups.map(g => {
+      const pct = g.taxable ? U.round2(g.tax / g.taxable * 100) : 0;
+      return inter
+        ? `<tr><td>${U.esc(g.hsn)}</td><td class="sheet-num">${U.money(g.taxable)}</td><td class="sheet-num">${pct.toFixed(1)}</td><td class="sheet-num">${U.money(g.igst)}</td><td class="sheet-num">${U.money(g.tax)}</td></tr>`
+        : `<tr><td>${U.esc(g.hsn)}</td><td class="sheet-num">${U.money(g.taxable)}</td><td class="sheet-num">${half(pct).toFixed(1)}</td><td class="sheet-num">${U.money(g.cgst)}</td><td class="sheet-num">${half(pct).toFixed(1)}</td><td class="sheet-num">${U.money(g.sgst)}</td><td class="sheet-num">${U.money(g.tax)}</td></tr>`;
+    }).join('');
+    const taxable = U.round2(groups.reduce((s, g) => s + g.taxable, 0));
+    const tax = U.round2(groups.reduce((s, g) => s + g.tax, 0));
+    const cgst = U.round2(groups.reduce((s, g) => s + (g.cgst || 0), 0));
+    const sgst = U.round2(groups.reduce((s, g) => s + (g.sgst || 0), 0));
+    const igst = U.round2(groups.reduce((s, g) => s + (g.igst || 0), 0));
+    const foot = inter
+      ? `<tr><td>TOTAL</td><td class="sheet-num">${U.money(taxable)}</td><td></td><td class="sheet-num">${U.money(igst)}</td><td class="sheet-num">${U.money(tax)}</td></tr>`
+      : `<tr><td>TOTAL</td><td class="sheet-num">${U.money(taxable)}</td><td></td><td class="sheet-num">${U.money(cgst)}</td><td></td><td class="sheet-num">${U.money(sgst)}</td><td class="sheet-num">${U.money(tax)}</td></tr>`;
+    return `<div class="sheet-label">Tax Summary:</div><table class="sheet-mini">${head}${body}${foot}</table>`;
+  }
+
+  function totalsBox(before, wordsLabel, words, after) {
+    const line = r => `<tr><td>${U.esc(r[0])}</td><td>:</td><td class="sheet-num">${r[1]}</td></tr>`;
+    return `<table class="sheet-mini">
+      ${(before || []).map(line).join('')}
+      <tr><td colspan="3"><div class="sheet-label">${U.esc(wordsLabel)}</div>${U.esc(words)}</td></tr>
+      ${(after || []).map(line).join('')}
+    </table>`;
+  }
+
+  function signBlock() {
+    const f = firm();
+    return `<td><div class="sheet-label">For ${U.esc(f.name)}:</div><div class="sheet-sign"><span>Authorized Signatory</span></div></td>`;
+  }
+
+  function paper(title, inner) {
+    return `<div class="sheet-doc"><div class="sheet-title">${U.esc(title)}</div>${inner}</div>`;
+  }
+
   function estimate(doc) {
     const list = Books.items('EstimateItems', 'estimate_id', doc.id);
     const p = Books.party(doc.party_id) || {};
-    open(head('Estimate', [['No.', doc.estimate_no || 'Pending'], ['Date', U.fmtDate(doc.date)]])
-      + partyBlock(p.name, [p.address, p.phone, p.gstin])
-      + linesTable(list, false)
-      + totals([['Total', U.money(doc.total)]])
-      + `<div class="small mt-2">${U.esc(U.inWords(doc.total))}</div>`
-      + foot(doc.notes));
+    const sub = U.round2(list.reduce((s, it) => s + (Number(it.amount) || 0), 0));
+    const t = Books.tax(sub, p.state);
+    const gst = t.rate > 0;
+    const lines = pricedLines(list, gst ? t.rate : 0);
+    const groups = gst ? taxGroups(lines, t.rate, t.inter) : [];
+    if (gst) fitTax(lines, groups, t.tax);
+    const table = moneyTable(lines, gst, t.rate);
+    const total = gst ? table.gross : sub;
+    open(paper('Estimate', `<table class="sheet-box">
+        ${firmBlock()}
+        <tr>
+          ${partyCell('Estimate For:', p)}
+          ${detailsCell('Estimate Details:', [['No', doc.estimate_no || ''], ['Date', dmy(doc.date)], ['Place of Supply', stateLabel(p.state)]])}
+        </tr>
+      </table>
+      ${table.html}
+      <table class="sheet-box"><tr>
+        <td>${gst ? taxSummary(groups, t.inter) : ''}</td>
+        <td style="width:38%">${totalsBox([['Sub Total', rupee(total)], ['Total', rupee(total)]], 'Estimate Amount In Words :', U.inWords(total))}</td>
+      </tr><tr>
+        <td><div class="sheet-label">Bank Details:</div><div class="sheet-sign"></div></td>
+        ${signBlock()}
+      </tr></table>`));
   }
 
   function job(doc) {
@@ -126,48 +324,93 @@ const Docs = (() => {
   function invoice(doc) {
     const gst = doc.tax_mode === 'gst';
     const list = Books.items('InvoiceItems', 'invoice_id', doc.id);
-    const rows = [['Taxable value', U.money(doc.subtotal)]];
-    if (gst) {
-      if (Number(doc.cgst)) rows.push([`CGST`, U.money(doc.cgst)]);
-      if (Number(doc.sgst)) rows.push([`SGST`, U.money(doc.sgst)]);
-      if (Number(doc.igst)) rows.push([`IGST`, U.money(doc.igst)]);
-    }
-    rows.push(['Grand total', `<strong>${U.money(doc.total)}</strong>`]);
+    const rate = gst ? Number(doc.gst_rate) || 0 : 0;
+    const inter = gst && Number(doc.igst) > 0;
+    const lines = pricedLines(list, rate);
+    const groups = gst ? taxGroups(lines, rate, inter) : [];
+    if (gst) fitTax(lines, groups, doc.tax_amount);
+    const table = moneyTable(lines, gst, rate);
+    const buyer = { name: doc.buyer_name, address: doc.buyer_address, phone: doc.buyer_phone, state: doc.buyer_state, gstin: doc.buyer_gstin };
     const paid = Books.receivedOnInvoice(doc);
-    rows.push(['Received', U.money(paid)], ['Balance', U.money(Books.invoiceDue(doc))]);
-    const payments = (doc.job_id ? Books.orderReceipts(doc.job_id) : Store.list('Receipts').filter(r => r.invoice_id === doc.id && !r.job_id && r.status !== 'Void'))
-      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    const paymentLines = payments.map(r =>
-      `<div>${U.fmtDate(r.date)} · ${U.esc(r.receipt_no || 'Receipt')} · ${U.esc(r.account || '')} · ${U.money(r.amount)}</div>`
-    ).join('');
-    open(head(gst ? 'Tax Invoice' : 'Invoice', [
-      ['No.', doc.invoice_no || 'Pending'],
-      ['Date', U.fmtDate(doc.date)],
-      ['Mode', gst ? 'With GST' : 'Without GST']
-    ])
-      + partyBlock(doc.buyer_name, [doc.buyer_address, doc.buyer_phone, doc.buyer_gstin ? 'GSTIN ' + doc.buyer_gstin : '', doc.buyer_state])
-      + (doc.status === 'Void' ? `<div class="alert alert-danger">Void. ${U.esc(doc.void_reason || '')}</div>` : '')
-      + linesTable(list, gst)
-      + totals(rows)
-      + (paymentLines ? `<div class="small mt-2"><strong>Payments</strong>${paymentLines}</div>` : '')
-      + `<div class="small mt-2">${U.esc(U.inWords(doc.total))}</div>`
-      + foot(doc.notes));
+    const due = Books.invoiceDue(doc);
+    const total = U.round2(doc.total);
+    open(paper('Invoice', `<table class="sheet-box">
+        ${firmBlock()}
+        <tr>
+          ${partyCell('Bill To:', buyer)}
+          ${detailsCell('Invoice Details:', [['No', doc.invoice_no || ''], ['Date', dmy(doc.date)], ['Place of Supply', stateLabel(doc.buyer_state)]])}
+        </tr>
+      </table>
+      ${doc.status === 'Void' ? `<div class="alert alert-danger">Void. ${U.esc(doc.void_reason || '')}</div>` : ''}
+      ${table.html}
+      <table class="sheet-box"><tr>
+        <td>${gst ? taxSummary(groups, inter) : ''}</td>
+        <td style="width:38%">${totalsBox(
+          [['Sub Total', rupee(total)], ['Total', rupee(total)]],
+          'Invoice Amount In Words :', U.inWords(total),
+          [['Received', rupee(paid)], ['Balance', rupee(due)]]
+        )}</td>
+      </tr><tr>
+        <td><div class="sheet-label">Bank Details:</div><div class="sheet-sign"></div></td>
+        ${signBlock()}
+      </tr></table>`));
   }
 
   function receipt(doc) {
-    const order = doc.job_id ? Store.get('Jobs', doc.job_id) : null;
-    const inv = !order && doc.invoice_id ? Store.get('Invoices', doc.invoice_id) : null;
-    const against = order
-      ? ` against order <strong>${U.esc(order.job_no || '')}</strong>`
-      : inv
-        ? ` against ${inv.tax_mode === 'gst' ? 'tax invoice' : 'invoice'} <strong>${U.esc(inv.invoice_no || '')}</strong>`
-        : '';
-    open(head('Receipt', [['No.', doc.receipt_no || 'Pending'], ['Date', U.fmtDate(doc.date)]])
-      + `<p>Received ${U.inr(doc.amount)} from <strong>${U.esc(doc.party_id ? Books.partyName(doc.party_id) : '')}</strong>${against}
-        into ${U.esc(doc.account || 'Cash')}.</p>
-        <p>${U.esc(U.inWords(doc.amount))}</p>
-        ${doc.note ? `<p class="small">${U.esc(doc.note)}</p>` : ''}
-        ${doc.status === 'Void' ? '<p class="text-danger">This receipt is void.</p>' : ''}`);
+    const party = Books.party(doc.party_id) || {};
+    const who = { name: party.name || '', address: party.address || '', phone: party.phone || '' };
+    open(paper('Payment Receipt', `<table class="sheet-box">
+        ${firmBlock()}
+        <tr>
+          ${partyCell('Received From:', who)}
+          ${detailsCell('Receipt Details:', [['No', doc.receipt_no || ''], ['Date', dmy(doc.date)]])}
+        </tr>
+        <tr>
+          <td>${doc.note ? U.esc(doc.note) : ''}${doc.status === 'Void' ? '<div>This receipt is void.</div>' : ''}</td>
+          <td style="width:42%">${totalsBox([['Received', rupee(doc.amount)]], 'Amount In Words :', U.inWords(doc.amount))}</td>
+        </tr>
+      </table>
+      <table class="sheet-box" style="width:46%;margin-left:auto"><tr>${signBlock()}</tr></table>`));
+  }
+
+  /** Goods note for an order. Once an invoice exists, the challan uses that bill's number and lines. */
+  function deliveryChallan(job, invoice) {
+    const inv = invoice || (job ? Books.activeInvoiceForJob(job.id) : null);
+    const list = inv
+      ? Books.items('InvoiceItems', 'invoice_id', inv.id)
+      : Books.items('JobItems', 'job_id', job.id);
+    const party = job ? (Books.party(job.party_id) || {}) : {};
+    const who = inv
+      ? { name: inv.buyer_name, address: inv.buyer_address, phone: inv.buyer_phone, state: inv.buyer_state, gstin: inv.buyer_gstin }
+      : party;
+    const lines = list.map((it, i) => ({ n: i + 1, name: it.item_name || '', hsn: it.hsn || '', qty: Books.billQty(it), unit: unitText(it) }));
+    const qty = U.round2(lines.reduce((s, it) => s + it.qty, 0));
+    const body = lines.map(it => `<tr>
+      <td>${it.n}</td>
+      <td class="sheet-item">${U.esc(it.name)}</td>
+      <td>${U.esc(it.hsn)}</td>
+      <td class="sheet-num">${qtyText(it.qty)}</td>
+      <td>${U.esc(it.unit)}</td>
+    </tr>`).join('');
+    const hand = label => `<td><div class="sheet-label">${label}</div>
+      <div>Name:</div><div>Comment:</div><div>Date:</div><div>Signature:</div><div style="height:2.2rem"></div></td>`;
+    open(paper('Delivery Challan', `<table class="sheet-box">
+        ${firmBlock()}
+        <tr>
+          ${partyCell('Bill To:', who)}
+          ${detailsCell(inv ? 'Invoice Details:' : 'Order Details:', [
+            ['No', inv ? (inv.invoice_no || '') : (job.job_no || '')],
+            ['Date', dmy(inv ? inv.date : job.date)],
+            ['Place of Supply', stateLabel(who.state)]
+          ])}
+        </tr>
+      </table>
+      <table class="sheet-box">
+        <tr><th>#</th><th>Item name</th><th>HSN/ SAC</th><th class="sheet-num">Quantity</th><th>Unit</th></tr>
+        ${body}
+        <tr><td></td><td class="sheet-item">Total</td><td></td><td class="sheet-num">${qtyText(qty)}</td><td></td></tr>
+      </table>
+      <table class="sheet-box"><tr>${hand('Received By:')} ${hand('Delivered By:')} ${signBlock()}</tr></table>`));
   }
 
   function statement(party) {
@@ -186,5 +429,5 @@ const Docs = (() => {
       + totals([['Balance', `<strong>${U.money(st.balance)}</strong>`]]));
   }
 
-  return { estimate, job, invoice, receipt, statement, awaitNumber };
+  return { estimate, job, invoice, receipt, deliveryChallan, statement, awaitNumber };
 })();

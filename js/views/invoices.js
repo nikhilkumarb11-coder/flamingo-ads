@@ -44,6 +44,7 @@ Views.invoices = {
     const number = doc.invoice_no || (doc._pending ? 'Waiting for number' : 'Number missing');
     el.innerHTML = `<div class="d-flex flex-wrap gap-2 mb-3">
         <button type="button" class="btn btn-primary" data-print>${doc.tax_mode === 'gst' ? 'Print tax invoice' : 'Print invoice'}</button>
+        ${doc.status !== 'Void' ? '<button type="button" class="btn btn-outline-primary" data-challan>Delivery challan</button>' : ''}
         ${doc.status !== 'Void' ? `<button type="button" class="btn btn-outline-danger" data-void>Void</button>` : ''}
         ${doc.job_id ? `<a class="btn btn-outline-secondary" href="#/orders/${doc.job_id}">Order</a>` : ''}
       </div>
@@ -67,6 +68,13 @@ Views.invoices = {
       <div data-settle></div>`;
     if (doc.status !== 'Void' && doc.job_id) Views.receipts.showOnInvoice(el.querySelector('[data-settle]'), doc);
     else if (doc.status !== 'Void') Views.receipts.settle(el.querySelector('[data-settle]'), doc, () => this.detail(el, id));
+    const challanBtn = el.querySelector('[data-challan]');
+    if (challanBtn) challanBtn.addEventListener('click', async () => {
+      const live = await Docs.awaitNumber('Invoices', id, 'invoice_no');
+      if (!live || !live.invoice_no) return UI.toast('The invoice number has not come back yet. Wait for Saved, then print again.', 'warning');
+      const job = live.job_id ? Store.get('Jobs', live.job_id) : null;
+      Docs.deliveryChallan(job, live);
+    });
     el.querySelector('[data-print]').addEventListener('click', async () => {
       const live = await Docs.awaitNumber('Invoices', id, 'invoice_no');
       if (!live || !live.invoice_no) return UI.toast('The invoice number has not come back yet. Wait for Saved, then print again.', 'warning');

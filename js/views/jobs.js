@@ -40,6 +40,7 @@ Views.orders = {
           ? `<a class="btn btn-outline-primary" href="#/invoices/${inv.id}">${U.esc(inv.invoice_no || 'Invoice')}</a>`
           : `<a class="btn btn-outline-primary" href="#/invoices/new/gst/${id}">Tax invoice</a>
              <a class="btn btn-outline-secondary" href="#/invoices/new/none/${id}">Invoice without GST</a>`}
+        <button type="button" class="btn btn-outline-primary" data-challan>Delivery challan</button>
         <button type="button" class="btn btn-outline-primary" data-print>Order sheet</button>
         <a class="btn btn-outline-secondary" href="#/orders/${id}/edit">Edit</a>
       </div>
@@ -66,6 +67,16 @@ Views.orders = {
         }).join('') || '<div class="text-muted small">Nothing issued yet. Saving the order does not move stock.</div>'}
       </div></div>`;
     Views.receipts.settleOrder(el.querySelector('[data-settle]'), doc, () => this.detail(el, id));
+    el.querySelector('[data-challan]').addEventListener('click', async () => {
+      const live = await Docs.awaitNumber('Jobs', id, 'job_no');
+      if (!live || !live.job_no) return UI.toast('The order number has not come back yet. Wait for Saved, then print again.', 'warning');
+      const inv = Books.activeInvoiceForJob(id);
+      if (inv && !inv.invoice_no) {
+        const numbered = await Docs.awaitNumber('Invoices', inv.id, 'invoice_no');
+        if (!numbered || !numbered.invoice_no) return UI.toast('The invoice number has not come back yet. Wait for Saved, then print again.', 'warning');
+      }
+      Docs.deliveryChallan(Store.get('Jobs', id));
+    });
     el.querySelector('[data-print]').addEventListener('click', async () => {
       const live = await Docs.awaitNumber('Jobs', id, 'job_no');
       if (!live || !live.job_no) return UI.toast('The order number has not come back yet. Wait for Saved, then print again.', 'warning');

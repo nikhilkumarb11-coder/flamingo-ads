@@ -1417,6 +1417,28 @@ body:has(.form-card) .fab-wrap { display: none; }
 .bill-sheet table { width: 100%; border-collapse: collapse; }
 .bill-sheet th, .bill-sheet td { border-bottom: 1px solid #efe8f2; padding: 0.4rem 0.35rem; font-size: 0.86rem; vertical-align: top; }
 .bill-sheet th { font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; color: #6d6478; }
+.sheet-doc { color: #111; font-size: 11px; line-height: 1.35; }
+.sheet-title { text-align: center; font-size: 18px; font-weight: 700; margin: 0 0 8px; color: #111; }
+.sheet-box { width: 100%; border-collapse: collapse; margin-top: -1px; }
+.bill-sheet .sheet-box th,
+.bill-sheet .sheet-box td { border: 1px solid #222; padding: 3px 5px; font-size: 11px; color: #111; text-transform: none; letter-spacing: 0; vertical-align: top; }
+.bill-sheet .sheet-box th { font-weight: 700; background: #f2f2f2; }
+.sheet-firm { display: flex; gap: 10px; align-items: flex-start; }
+.sheet-firm img { width: 78px; height: 78px; object-fit: contain; flex: 0 0 auto; }
+.sheet-firm-name { font-weight: 700; font-size: 14px; }
+.sheet-firm-meta { display: flex; justify-content: space-between; gap: 12px; }
+.sheet-label { font-weight: 700; background: #f2f2f2; }
+.sheet-party { font-weight: 700; text-transform: uppercase; }
+.sheet-num { text-align: right; white-space: nowrap; }
+.sheet-item { font-weight: 700; text-transform: uppercase; }
+.sheet-sign { height: 78px; text-align: center; }
+.sheet-sign span { display: block; margin-top: 58px; }
+.sheet-mini { width: 100%; border-collapse: collapse; }
+.bill-sheet .sheet-mini th,
+.bill-sheet .sheet-mini td { border: 1px solid #222; padding: 2px 4px; font-size: 10px; }
+@media print {
+  .sheet-box th, .sheet-label { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
 .bill-actions { width: min(800px, 100%); margin: 0 auto 0.75rem; display: flex; justify-content: flex-end; gap: 0.5rem; }
 @media print {
   body * { visibility: hidden !important; }
